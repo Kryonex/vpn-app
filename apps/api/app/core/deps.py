@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.redis import redis_dependency
@@ -36,7 +37,9 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token payload')
 
     user_id = UUID(subject)
-    user = await session.scalar(select(User).where(User.id == user_id))
+    user = await session.scalar(
+        select(User).where(User.id == user_id).options(selectinload(User.telegram_account))
+    )
     if not user:
         logger.warning('Auth user not found for token subject')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
