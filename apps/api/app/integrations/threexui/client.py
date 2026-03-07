@@ -33,6 +33,8 @@ class ThreeXUIClient:
             value = obj.strip()
             if value.startswith(('vless://', 'vmess://', 'trojan://', 'ss://', 'hysteria2://', 'tuic://')):
                 return value
+            if value.startswith(('http://', 'https://')) and '/sub/' in value:
+                return value
             return None
         if isinstance(obj, dict):
             for value in obj.values():
@@ -46,14 +48,15 @@ class ThreeXUIClient:
                     return extracted
         return None
 
-    def _build_subscription_url(self, sub_id: str) -> str | None:
+    def _build_subscription_url(self, sub_id: str, client_uuid: str) -> str | None:
         base = (self.settings.threexui_public_base_url or self.base_url).strip()
         if not base:
             return None
         parsed = urlparse(base)
         if not parsed.scheme or not parsed.netloc:
             return None
-        return f'{parsed.scheme}://{parsed.netloc}/sub/{sub_id}'
+        # Different 3x-ui builds may use either subId or client UUID in subscription endpoint.
+        return f'{parsed.scheme}://{parsed.netloc}/sub/{sub_id or client_uuid}'
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -146,7 +149,18 @@ class ThreeXUIClient:
                 json=payload_fallback,
             )
 
-        connection_uri = self._extract_connection_uri(data) or self._build_subscription_url(sub_id)
+        connection_uri = self._extract_connection_uri(data)
+        if not connection_uri:
+            info = await self.get_client_info(client_uuid)
+            connection_uri = self._extract_connection_uri(info or {})
+
+        if not connection_uri:
+            connection_uri = self._build_subscription_url(sub_id=sub_id, client_uuid=client_uuid)
+        if not connection_uri:
+            # final best-effort fallback for installations that expect UUID in sub endpoint
+            base = (self.settings.threexui_public_base_url or self.base_url).strip().rstrip('/')
+            if base:
+                connection_uri = f'{base}/sub/{client_uuid}'
 
         return ThreeXUICreatedClient(
             client_uuid=client_uuid,
