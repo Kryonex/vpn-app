@@ -5,14 +5,17 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.integrations.threexui.service import ThreeXUIService
+from app.models.bonus_day_ledger import BonusDayLedger
 from app.models.enums import PaymentStatus, SubscriptionStatus, VPNKeyStatus
 from app.models.payment import Payment
+from app.models.payment_event import PaymentEvent
 from app.models.plan import Plan
+from app.models.referral_reward import ReferralReward
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.vpn_key import VPNKey
@@ -115,6 +118,47 @@ class AdminService:
         await self.app_settings_repo.set('referral_bonus_days', str(value))
         await self.session.commit()
         return value
+
+    async def reset_keys_and_earnings(self, confirm_text: str) -> dict[str, int]:
+        if confirm_text.strip().upper() != 'RESET':
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid confirmation text')
+
+        active_versions = (
+            await self.session.scalars(
+                select(VPNKeyVersion).where(VPNKeyVersion.is_active.is_(True))
+            )
+        ).all()
+        for version in active_versions:
+            try:
+                await self.threexui_service.revoke_vpn_client(version)
+            except Exception:  # noqa: BLE001
+                # Continue local reset even if external revoke fails.
+                pass
+
+        payment_events_deleted = (await self.session.execute(delete(PaymentEvent))).rowcount or 0
+        bonus_ledger_deleted = (await self.session.execute(delete(BonusDayLedger))).rowcount or 0
+        referral_rewards_deleted = (await self.session.execute(delete(ReferralReward))).rowcount or 0
+        payments_deleted = (await self.session.execute(delete(Payment))).rowcount or 0
+        versions_deleted = (await self.session.execute(delete(VPNKeyVersion))).rowcount or 0
+        subscriptions_deleted = (await self.session.execute(delete(Subscription))).rowcount or 0
+        keys_deleted = (await self.session.execute(delete(VPNKey))).rowcount or 0
+        users_updated = (
+            await self.session.execute(
+                update(User).values(bonus_days_balance=0)
+            )
+        ).rowcount or 0
+
+        await self.session.commit()
+        return {
+            'keys_deleted': int(keys_deleted),
+            'subscriptions_deleted': int(subscriptions_deleted),
+            'versions_deleted': int(versions_deleted),
+            'payments_deleted': int(payments_deleted),
+            'payment_events_deleted': int(payment_events_deleted),
+            'bonus_ledger_deleted': int(bonus_ledger_deleted),
+            'referral_rewards_deleted': int(referral_rewards_deleted),
+            'users_bonus_reset': int(users_updated),
+        }
 
     async def create_plan(
         self,

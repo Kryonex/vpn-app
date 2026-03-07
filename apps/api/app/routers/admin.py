@@ -18,6 +18,7 @@ from app.schemas.admin import (
     AdminPaymentDecisionRequest,
     AdminPaymentsListResponse,
     AdminPlanCreateRequest,
+    AdminResetKeysEarningsRequest,
     AdminReferralSettingsOut,
     AdminReferralSettingsUpdateRequest,
     AdminPlanUpdateRequest,
@@ -164,6 +165,17 @@ async def admin_patch_referral_settings(
     service = AdminService(session, threexui_service)
     days = await service.set_referral_bonus_days(payload.referral_bonus_days)
     return AdminReferralSettingsOut(referral_bonus_days=days)
+
+
+@router.post('/system/reset-keys-and-earnings')
+async def admin_reset_keys_and_earnings(
+    payload: AdminResetKeysEarningsRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    stats = await service.reset_keys_and_earnings(payload.confirm_text)
+    return {'ok': True, **stats}
 
 
 @router.post('/plans')

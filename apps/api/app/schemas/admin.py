@@ -104,3 +104,7 @@ class AdminReferralSettingsOut(BaseModel):
 class AdminReferralSettingsUpdateRequest(BaseModel):
     referral_bonus_days: int = Field(ge=0, le=3650)
 
+
+class AdminResetKeysEarningsRequest(BaseModel):
+    confirm_text: str = Field(min_length=5, max_length=32)
+

@@ -350,6 +350,13 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(83, 113, 171, 0.16);
 }
 
+.btn-danger {
+  color: #ffe6ec;
+  border-color: rgba(255, 116, 152, 0.48);
+  background: linear-gradient(145deg, rgba(181, 49, 83, 0.82), rgba(128, 31, 58, 0.82));
+  box-shadow: 0 10px 24px rgba(148, 26, 56, 0.35);
+}
+
 .input-wrap {
   margin-top: 8px;
   border-radius: 12px;

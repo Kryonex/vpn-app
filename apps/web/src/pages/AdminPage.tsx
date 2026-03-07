@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, CircleSlash2, Plus, RefreshCw, Settings2, TrendingUp, Gift } from 'lucide-react';
+﻿import { CheckCircle2, CircleSlash2, Gift, Plus, RefreshCw, Settings2, TrendingUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
@@ -151,6 +151,26 @@ export function AdminPage() {
     }
   };
 
+  const resetKeysAndEarnings = async () => {
+    const confirmText = window.prompt('Это действие удалит все ключи и данные заработка. Введите RESET для подтверждения.');
+    if (!confirmText) return;
+
+    try {
+      const result = await apiRequest<{
+        ok: boolean;
+        keys_deleted: number;
+        payments_deleted: number;
+      }>('/admin/system/reset-keys-and-earnings', toJsonBody({ confirm_text: confirmText }));
+
+      if (result.ok) {
+        setMessage(`Сброс выполнен. Удалено ключей: ${result.keys_deleted}, платежей: ${result.payments_deleted}.`);
+        await loadData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось выполнить сброс данных');
+    }
+  };
+
   if (loading) {
     return <LoadingState text="Загружаем админ-панель..." />;
   }
@@ -203,6 +223,14 @@ export function AdminPage() {
         </div>
         <button className="btn btn-primary" onClick={() => void saveReferralSettings()}>
           Сохранить реферальную награду
+        </button>
+      </article>
+
+      <article className="glass-card">
+        <p className="title-line">Системный сброс</p>
+        <p className="muted">Полностью очищает данные о ключах, подписках, платежах и заработке. Пользователи и тарифы остаются.</p>
+        <button className="btn btn-danger" onClick={() => void resetKeysAndEarnings()}>
+          Обнулить базу ключей и заработка
         </button>
       </article>
 
