@@ -81,4 +81,6 @@ export type PaymentIntent = {
   provider: string;
   status: string;
   confirmation_url: string | null;
+  transfer_phone: string | null;
+  transfer_note: string | null;
 };

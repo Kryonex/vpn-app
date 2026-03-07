@@ -2,7 +2,11 @@ from app.schemas.admin import (
     AdminBonusDaysRequest,
     AdminGrantSubscriptionRequest,
     AdminKeyOut,
+    AdminPaymentDecisionRequest,
     AdminPaymentsListResponse,
+    AdminPlanCreateRequest,
+    AdminPlansListResponse,
+    AdminPlanUpdateRequest,
     AdminReferralStatOut,
     AdminRevokeKeyRequest,
     AdminSubscriptionOut,
@@ -10,7 +14,7 @@ from app.schemas.admin import (
 )
 from app.schemas.auth import AuthResponse, TelegramAuthRequest
 from app.schemas.key import PurchaseRequest, RenewRequest, RotateResponse, SubscriptionOut, VPNKeyOut
-from app.schemas.payment import PaymentIntentOut, PaymentOut, YooKassaWebhookResponse
+from app.schemas.payment import PaymentIntentOut, PaymentOut
 from app.schemas.plan import PlanOut
 from app.schemas.referral import ReferralMeOut
 from app.schemas.user import MeResponse, TelegramAccountOut
@@ -28,12 +32,15 @@ __all__ = [
     'VPNKeyOut',
     'PaymentOut',
     'PaymentIntentOut',
-    'YooKassaWebhookResponse',
     'ReferralMeOut',
     'AdminBonusDaysRequest',
     'AdminGrantSubscriptionRequest',
     'AdminKeyOut',
+    'AdminPaymentDecisionRequest',
     'AdminPaymentsListResponse',
+    'AdminPlanCreateRequest',
+    'AdminPlansListResponse',
+    'AdminPlanUpdateRequest',
     'AdminReferralStatOut',
     'AdminRevokeKeyRequest',
     'AdminSubscriptionOut',

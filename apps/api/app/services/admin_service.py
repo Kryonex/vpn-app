@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.enums import SubscriptionStatus, VPNKeyStatus
 from app.models.payment import Payment
+from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.vpn_key import VPNKey
@@ -52,6 +54,63 @@ class AdminService:
         stmt = select(Subscription).order_by(Subscription.created_at.desc()).offset(offset).limit(limit)
         result = await self.session.scalars(stmt)
         return result.all()
+
+    async def list_plans(self) -> list[Plan]:
+        return await self.plan_repo.list_all()
+
+    async def create_plan(
+        self,
+        *,
+        name: str,
+        duration_days: int,
+        price: Decimal,
+        currency: str,
+        is_active: bool,
+        sort_order: int,
+    ) -> Plan:
+        plan = await self.plan_repo.create(
+            name=name,
+            duration_days=duration_days,
+            price=price,
+            currency=currency,
+            is_active=is_active,
+            sort_order=sort_order,
+        )
+        await self.session.commit()
+        await self.session.refresh(plan)
+        return plan
+
+    async def update_plan(
+        self,
+        plan_id: UUID,
+        *,
+        name: str | None = None,
+        duration_days: int | None = None,
+        price: Decimal | None = None,
+        currency: str | None = None,
+        is_active: bool | None = None,
+        sort_order: int | None = None,
+    ) -> Plan:
+        plan = await self.plan_repo.get_by_id(plan_id)
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Plan not found')
+
+        if name is not None:
+            plan.name = name
+        if duration_days is not None:
+            plan.duration_days = duration_days
+        if price is not None:
+            plan.price = price
+        if currency is not None:
+            plan.currency = currency.upper()
+        if is_active is not None:
+            plan.is_active = is_active
+        if sort_order is not None:
+            plan.sort_order = sort_order
+
+        await self.session.commit()
+        await self.session.refresh(plan)
+        return plan
 
     async def revoke_key(self, key_id: UUID, reason: str) -> VPNKey:
         key = await self.session.scalar(

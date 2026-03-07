@@ -1,4 +1,4 @@
-﻿import { CircleDollarSign, Sparkles } from 'lucide-react';
+﻿import { CircleDollarSign, Copy, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -14,6 +14,8 @@ export function RenewKeyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [transferPhone, setTransferPhone] = useState<string | null>(null);
+  const [transferNote, setTransferNote] = useState<string | null>(null);
 
   useEffect(() => {
     apiRequest<Plan[]>('/plans')
@@ -29,15 +31,9 @@ export function RenewKeyPage() {
         `/keys/${keyId}/renew`,
         toJsonBody({ plan_id: planId, apply_bonus_days: bonusDays }),
       );
-      if (payment.confirmation_url) {
-        const tg = window.Telegram?.WebApp;
-        if (tg?.openLink) {
-          tg.openLink(payment.confirmation_url);
-        } else {
-          window.open(payment.confirmation_url, '_blank');
-        }
-      }
-      setMessage('Сессия оплаты создана. После оплаты срок ключа будет продлен.');
+      setTransferPhone(payment.transfer_phone);
+      setTransferNote(payment.transfer_note);
+      setMessage('Заявка на продление создана. Выполните перевод и отправьте чек администратору.');
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать платеж на продление');
@@ -67,6 +63,18 @@ export function RenewKeyPage() {
       {error && <ErrorState text={error} />}
       {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов нет" text="Попробуйте позже." />}
 
+      {transferPhone && (
+        <article className="glass-card">
+          <p className="title-line">Оплата переводом</p>
+          <p className="muted">Номер для перевода: <strong>{transferPhone}</strong></p>
+          <p className="muted">Комментарий к переводу:</p>
+          <p className="mono-block">{transferNote || 'VPN продление'}</p>
+          <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(transferPhone)}>
+            <Copy size={16} /> Скопировать номер
+          </button>
+        </article>
+      )}
+
       {!loading && !error && plans.map((plan) => (
         <article key={plan.id} className="glass-card plan-card">
           <div className="row-between">
@@ -75,7 +83,7 @@ export function RenewKeyPage() {
           </div>
           <p className="muted">Длительность: {plan.duration_days} дней</p>
           <button className="btn btn-primary" onClick={() => renew(plan.id)}>
-            <CircleDollarSign size={16} /> Оплатить продление
+            <CircleDollarSign size={16} /> Создать заявку на продление
           </button>
         </article>
       ))}

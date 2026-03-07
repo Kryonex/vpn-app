@@ -3,23 +3,31 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_admin
 from app.core.factories import threexui_dependency
+from app.core.redis import redis_dependency
 from app.db.session import get_session
 from app.integrations.threexui.service import ThreeXUIService
 from app.schemas.admin import (
     AdminBonusDaysRequest,
     AdminGrantSubscriptionRequest,
     AdminKeyOut,
+    AdminPaymentDecisionRequest,
     AdminPaymentsListResponse,
+    AdminPlanCreateRequest,
+    AdminPlanUpdateRequest,
+    AdminPlansListResponse,
     AdminReferralStatOut,
     AdminRevokeKeyRequest,
     AdminSubscriptionOut,
     AdminUserOut,
 )
 from app.services.admin_service import AdminService
+from app.services.notification_service import NotificationService
+from app.services.payment_service import PaymentService
 
 router = APIRouter(prefix='/admin', tags=['admin'], dependencies=[Depends(require_admin)])
 
@@ -45,6 +53,40 @@ async def admin_list_payments(
     service = AdminService(session, threexui_service)
     items = await service.list_payments(limit=limit, offset=offset)
     return AdminPaymentsListResponse(items=items)
+
+
+@router.post('/payments/{payment_id}/approve')
+async def admin_approve_payment(
+    payment_id: UUID,
+    _: AdminPaymentDecisionRequest,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(redis_dependency),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    payment_service = PaymentService(
+        session=session,
+        threexui_service=threexui_service,
+        notification_service=NotificationService(redis),
+    )
+    payment = await payment_service.mark_manual_payment_succeeded(payment_id)
+    return {'ok': True, 'payment_id': str(payment.id), 'status': payment.status.value}
+
+
+@router.post('/payments/{payment_id}/reject')
+async def admin_reject_payment(
+    payment_id: UUID,
+    _: AdminPaymentDecisionRequest,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(redis_dependency),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    payment_service = PaymentService(
+        session=session,
+        threexui_service=threexui_service,
+        notification_service=NotificationService(redis),
+    )
+    payment = await payment_service.mark_manual_payment_failed(payment_id)
+    return {'ok': True, 'payment_id': str(payment.id), 'status': payment.status.value}
 
 
 @router.get('/keys', response_model=list[AdminKeyOut])
@@ -78,6 +120,54 @@ async def admin_list_subscriptions(
 ):
     service = AdminService(session, threexui_service)
     return await service.list_subscriptions(limit=limit, offset=offset)
+
+
+@router.get('/plans', response_model=AdminPlansListResponse)
+async def admin_list_plans(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    items = await service.list_plans()
+    return AdminPlansListResponse(items=items)
+
+
+@router.post('/plans')
+async def admin_create_plan(
+    payload: AdminPlanCreateRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    plan = await service.create_plan(
+        name=payload.name,
+        duration_days=payload.duration_days,
+        price=payload.price,
+        currency=payload.currency,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+    return {'ok': True, 'plan_id': str(plan.id)}
+
+
+@router.patch('/plans/{plan_id}')
+async def admin_update_plan(
+    plan_id: UUID,
+    payload: AdminPlanUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    plan = await service.update_plan(
+        plan_id=plan_id,
+        name=payload.name,
+        duration_days=payload.duration_days,
+        price=payload.price,
+        currency=payload.currency,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+    return {'ok': True, 'plan_id': str(plan.id)}
 
 
 @router.post('/keys/{key_id}/revoke', response_model=AdminKeyOut)

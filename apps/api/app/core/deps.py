@@ -47,10 +47,38 @@ async def get_current_user(
     return user
 
 
-async def require_admin(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]) -> None:
+async def require_admin(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
     settings = get_settings()
-    if not credentials or credentials.credentials != settings.admin_bearer_token:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing admin token')
+
+    token = credentials.credentials
+    if settings.admin_bearer_token and token == settings.admin_bearer_token:
+        return
+
+    if settings.telegram_admin_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid admin token')
+
+    try:
+        payload = decode_access_token(token)
+        subject = payload.get('sub')
+        if not subject:
+            raise ValueError('missing_sub')
+        user_id = UUID(subject)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid admin token') from None
+
+    user = await session.scalar(
+        select(User).where(User.id == user_id).options(selectinload(User.telegram_account))
+    )
+    if not user or not user.telegram_account:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Admin access denied')
+
+    if user.telegram_account.telegram_user_id != settings.telegram_admin_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Admin access denied')
 
 
 async def rate_limit(

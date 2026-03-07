@@ -8,7 +8,7 @@ Production-lean MVP for selling and managing VPN subscriptions in Telegram.
 - DB: PostgreSQL
 - Queue/Cache: Redis
 - Frontend: React + Vite + Telegram Mini Apps SDK
-- Payments: YooKassa (via provider abstraction)
+- Payments: manual transfer by phone (with admin approval)
 - VPN panel integration: 3x-ui API (adapter layer)
 - Infra: Docker Compose
 
@@ -26,7 +26,6 @@ Production-lean MVP for selling and managing VPN subscriptions in Telegram.
 │  │  │  ├─ services/
 │  │  │  ├─ integrations/
 │  │  │  │  ├─ payments/
-│  │  │  │  ├─ yookassa/
 │  │  │  │  └─ threexui/
 │  │  │  ├─ routers/
 │  │  │  ├─ tasks/
@@ -57,9 +56,10 @@ Required variables:
 - `MINI_APP_URL`
 - `JWT_SECRET`
 - `ADMIN_BEARER_TOKEN`
+- `TELEGRAM_ADMIN_ID` (optional, admin access via Telegram JWT)
+- `PAYMENT_PHONE` (required for manual transfer flow)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `DATABASE_URL` (must match postgres credentials)
-- `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, `YOOKASSA_RETURN_URL`
 - `THREEXUI_BASE_URL`, `THREEXUI_USERNAME`, `THREEXUI_PASSWORD`
 
 ## Run with Docker Compose
@@ -174,4 +174,6 @@ docker compose up -d --build
 - Mini App is the main user interface.
 - Bot is used for `/start`, open-app button, and notifications.
 - Renew extends existing key/subscription; rotate creates a new key version.
+- Payment flow: user creates payment request, transfers money to `PAYMENT_PHONE`, admin confirms payment in `/admin/payments/{payment_id}/approve`.
+- Admin can manage tariffs via `/admin/plans` (`GET`, `POST`, `PATCH /admin/plans/{plan_id}`).
 - Secrets are loaded from environment variables only.

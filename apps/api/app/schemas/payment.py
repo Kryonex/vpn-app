@@ -30,8 +30,6 @@ class PaymentIntentOut(BaseModel):
     provider: PaymentProvider
     status: PaymentStatus
     confirmation_url: str | None
-
-
-class YooKassaWebhookResponse(BaseModel):
-    ok: bool = True
+    transfer_phone: str | None = None
+    transfer_note: str | None = None
 

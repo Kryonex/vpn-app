@@ -6,6 +6,14 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
 import type { Payment } from '../types/models';
 
+const paymentStatusLabels: Record<string, string> = {
+  pending: 'Ожидает подтверждения',
+  waiting_for_capture: 'Ожидает подтверждения',
+  succeeded: 'Успешно',
+  canceled: 'Отменен',
+  failed: 'Отклонен',
+};
+
 function paymentIcon(status: string) {
   if (status === 'succeeded') return <CircleCheckBig size={16} className="icon-success" />;
   if (status === 'pending' || status === 'waiting_for_capture') return <Clock3 size={16} className="icon-pending" />;
@@ -40,7 +48,7 @@ export function PaymentsPage() {
             <p className="title-line">{payment.amount} {payment.currency}</p>
             <div className="row-inline">
               {paymentIcon(payment.status)}
-              <span className="muted caps">{payment.status}</span>
+              <span className="muted caps">{paymentStatusLabels[payment.status] ?? payment.status}</span>
             </div>
           </div>
           <p className="muted">Операция: {payment.operation}</p>

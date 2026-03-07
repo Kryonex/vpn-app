@@ -1,9 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -12,11 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.integrations.payments.base import PaymentProvider
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.enums import PaymentOperation, PaymentProvider as PaymentProviderEnum, PaymentStatus, SubscriptionStatus, VPNKeyStatus
 from app.models.payment import Payment
-from app.models.payment_event import PaymentEvent
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.vpn_key import VPNKey
@@ -32,12 +28,10 @@ class PaymentService:
     def __init__(
         self,
         session: AsyncSession,
-        provider: PaymentProvider,
         threexui_service: ThreeXUIService,
         notification_service: NotificationService,
     ) -> None:
         self.session = session
-        self.provider = provider
         self.threexui_service = threexui_service
         self.notification_service = notification_service
         self.payment_repo = PaymentRepository(session)
@@ -53,37 +47,33 @@ class PaymentService:
         key_name: str | None,
         apply_bonus_days: int,
     ) -> Payment:
+        if not self.settings.payment_phone:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Payment phone is not configured')
+
         plan = await self.plan_repo.get_by_id(plan_id)
         if not plan or not plan.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Plan not found')
 
         bonus_days = await self._validate_bonus_days(user, apply_bonus_days)
+        transfer_note = self._build_transfer_note(operation=PaymentOperation.PURCHASE, plan_name=plan.name)
+
         payment = Payment(
             user_id=user.id,
             plan_id=plan.id,
-            provider=PaymentProviderEnum.YOOKASSA,
+            provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, used as generic provider marker
             operation=PaymentOperation.PURCHASE,
             amount=plan.price,
             currency=plan.currency,
             status=PaymentStatus.PENDING,
             idempotence_key=uuid.uuid4().hex,
             bonus_days_applied=bonus_days,
-            metadata_json={'key_name': key_name or 'VPN Key'},
+            metadata_json={
+                'key_name': key_name or 'VPN Key',
+                'transfer_phone': self.settings.payment_phone,
+                'transfer_note': transfer_note,
+            },
         )
         await self.payment_repo.create(payment)
-
-        provider_result = await self.provider.create_payment(
-            amount=payment.amount,
-            currency=payment.currency,
-            description=f'VPN subscription: {plan.name}',
-            return_url=self.settings.yookassa_return_url,
-            idempotence_key=payment.idempotence_key,
-            metadata={'internal_payment_id': str(payment.id), 'operation': payment.operation.value},
-        )
-
-        payment.external_payment_id = provider_result.payment_id
-        payment.confirmation_url = provider_result.confirmation_url
-        payment.status = self._map_provider_status(provider_result.status)
 
         await self.session.commit()
         await self.session.refresh(payment)
@@ -96,6 +86,9 @@ class PaymentService:
         plan_id: UUID,
         apply_bonus_days: int,
     ) -> Payment:
+        if not self.settings.payment_phone:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Payment phone is not configured')
+
         key = await self.key_repo.get_owned_key(key_id, user.id)
         if not key:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Key not found')
@@ -105,81 +98,66 @@ class PaymentService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Plan not found')
 
         bonus_days = await self._validate_bonus_days(user, apply_bonus_days)
+        transfer_note = self._build_transfer_note(operation=PaymentOperation.RENEW, plan_name=plan.name)
 
         payment = Payment(
             user_id=user.id,
             vpn_key_id=key.id,
             plan_id=plan.id,
-            provider=PaymentProviderEnum.YOOKASSA,
+            provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, used as generic provider marker
             operation=PaymentOperation.RENEW,
             amount=plan.price,
             currency=plan.currency,
             status=PaymentStatus.PENDING,
             idempotence_key=uuid.uuid4().hex,
             bonus_days_applied=bonus_days,
-            metadata_json={'key_name': key.display_name},
+            metadata_json={
+                'key_name': key.display_name,
+                'transfer_phone': self.settings.payment_phone,
+                'transfer_note': transfer_note,
+            },
         )
         await self.payment_repo.create(payment)
-
-        provider_result = await self.provider.create_payment(
-            amount=payment.amount,
-            currency=payment.currency,
-            description=f'Renew VPN key: {key.display_name}',
-            return_url=self.settings.yookassa_return_url,
-            idempotence_key=payment.idempotence_key,
-            metadata={'internal_payment_id': str(payment.id), 'operation': payment.operation.value},
-        )
-
-        payment.external_payment_id = provider_result.payment_id
-        payment.confirmation_url = provider_result.confirmation_url
-        payment.status = self._map_provider_status(provider_result.status)
 
         await self.session.commit()
         await self.session.refresh(payment)
         return payment
 
-    async def process_yookassa_webhook(self, payload: dict[str, Any]) -> None:
-        event = await self.provider.parse_webhook(payload)
-
-        existing_event = await self.session.scalar(
-            select(PaymentEvent).where(PaymentEvent.provider_event_id == event.provider_event_id)
-        )
-        if existing_event:
-            return
-
-        payment = await self.payment_repo.get_by_external_id(event.payment_id)
-        payment_event = PaymentEvent(
-            payment_id=payment.id if payment else None,
-            provider=PaymentProviderEnum.YOOKASSA,
-            provider_event_id=event.provider_event_id,
-            event_type=event.event_type,
-            payload=event.raw,
-        )
-        self.session.add(payment_event)
-
-        if not payment:
-            await self.session.commit()
-            return
-
-        locked_payment = await self.payment_repo.get_by_id_for_update(payment.id)
+    async def mark_manual_payment_succeeded(self, payment_id: UUID) -> Payment:
+        locked_payment = await self.payment_repo.get_by_id_for_update(payment_id)
         if not locked_payment:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Payment not found')
+
+        if locked_payment.status == PaymentStatus.SUCCEEDED:
             await self.session.commit()
-            return
+            return locked_payment
 
-        provider_payment = await self.provider.get_payment(locked_payment.external_payment_id or '')
-        if provider_payment.amount != locked_payment.amount or provider_payment.currency != locked_payment.currency:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Payment amount or currency mismatch',
-            )
-        locked_payment.status = self._map_provider_status(provider_payment.status)
+        if locked_payment.status in {PaymentStatus.CANCELED, PaymentStatus.FAILED}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Payment is not payable')
 
-        if locked_payment.status == PaymentStatus.SUCCEEDED and locked_payment.processed_at is None:
-            await self._apply_successful_payment(locked_payment)
-            locked_payment.succeeded_at = datetime.now(timezone.utc)
-            locked_payment.processed_at = datetime.now(timezone.utc)
+        locked_payment.status = PaymentStatus.SUCCEEDED
+        await self._apply_successful_payment(locked_payment)
+        now = datetime.now(timezone.utc)
+        locked_payment.succeeded_at = now
+        locked_payment.processed_at = now
 
         await self.session.commit()
+        await self.session.refresh(locked_payment)
+        return locked_payment
+
+    async def mark_manual_payment_failed(self, payment_id: UUID) -> Payment:
+        locked_payment = await self.payment_repo.get_by_id_for_update(payment_id)
+        if not locked_payment:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Payment not found')
+
+        if locked_payment.status == PaymentStatus.SUCCEEDED:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Succeeded payment cannot be failed')
+
+        locked_payment.status = PaymentStatus.FAILED
+        locked_payment.processed_at = datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(locked_payment)
+        return locked_payment
 
     async def _apply_successful_payment(self, payment: Payment) -> None:
         user = await self.session.scalar(
@@ -323,14 +301,6 @@ class PaymentService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Not enough bonus days')
         return apply_bonus_days
 
-    @staticmethod
-    def _map_provider_status(raw_status: str) -> PaymentStatus:
-        mapping = {
-            'pending': PaymentStatus.PENDING,
-            'waiting_for_capture': PaymentStatus.WAITING_FOR_CAPTURE,
-            'succeeded': PaymentStatus.SUCCEEDED,
-            'canceled': PaymentStatus.CANCELED,
-            'failed': PaymentStatus.FAILED,
-        }
-        return mapping.get(raw_status, PaymentStatus.PENDING)
-
+    def _build_transfer_note(self, operation: PaymentOperation, plan_name: str) -> str:
+        operation_text = 'покупка' if operation == PaymentOperation.PURCHASE else 'продление'
+        return f'VPN {operation_text} | {plan_name} | payment:{uuid.uuid4().hex[:10]}'

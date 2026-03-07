@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -6,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.models.enums import VPNKeyStatus
 from app.schemas.base import BaseSchema
 from app.schemas.payment import PaymentOut
+from app.schemas.plan import PlanOut
 
 
 class AdminUserOut(BaseSchema):
@@ -58,4 +60,30 @@ class AdminSubscriptionOut(BaseSchema):
     starts_at: datetime
     expires_at: datetime
     status: str
+
+
+class AdminPlanCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=64)
+    duration_days: int = Field(ge=1, le=3650)
+    price: Decimal = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=8)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class AdminPlanUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=64)
+    duration_days: int | None = Field(default=None, ge=1, le=3650)
+    price: Decimal | None = Field(default=None, gt=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=8)
+    is_active: bool | None = None
+    sort_order: int | None = None
+
+
+class AdminPaymentDecisionRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class AdminPlansListResponse(BaseModel):
+    items: list[PlanOut]
 

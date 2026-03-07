@@ -31,6 +31,33 @@ body {
     radial-gradient(1000px 480px at 100% -20%, rgba(83, 141, 255, 0.28), transparent 55%),
     radial-gradient(720px 420px at -10% 30%, rgba(65, 233, 210, 0.13), transparent 60%),
     var(--bg);
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  filter: blur(60px);
+  z-index: -1;
+  opacity: 0.24;
+}
+
+body::before {
+  top: -120px;
+  left: -80px;
+  background: #3992ff;
+  animation: floatOrbA 10s ease-in-out infinite;
+}
+
+body::after {
+  right: -110px;
+  bottom: 80px;
+  background: #3ad8a6;
+  animation: floatOrbB 14s ease-in-out infinite;
 }
 
 a {
@@ -56,6 +83,22 @@ h1 {
 .stack {
   display: grid;
   gap: 12px;
+}
+
+.stack > * {
+  animation: fadeUp 420ms ease both;
+}
+
+.stack > *:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.stack > *:nth-child(3) {
+  animation-delay: 90ms;
+}
+
+.stack > *:nth-child(4) {
+  animation-delay: 130ms;
 }
 
 .page-header {
@@ -91,6 +134,17 @@ h1 {
   background:
     linear-gradient(160deg, rgba(52, 100, 205, 0.48), rgba(28, 48, 92, 0.68));
   box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 35%, rgba(255, 255, 255, 0.14), transparent 65%);
+  transform: translateX(-120%);
+  animation: shimmer 3.4s ease-in-out infinite;
 }
 
 .hero-label {
@@ -120,6 +174,13 @@ h1 {
   background: var(--card);
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 52px rgba(2, 8, 23, 0.5);
+  border-color: rgba(173, 196, 240, 0.3);
 }
 
 .stat-grid {
@@ -220,11 +281,15 @@ h1 {
   gap: 6px;
   font-weight: 650;
   cursor: pointer;
-  transition: 0.2s transform ease, 0.2s background-color ease;
+  transition: 0.2s transform ease, 0.2s background-color ease, 0.2s box-shadow ease;
 }
 
 .btn:active {
   transform: scale(0.98);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
 }
 
 .btn:disabled {
@@ -235,6 +300,7 @@ h1 {
 .btn-primary {
   color: #061025;
   background: linear-gradient(145deg, #82c2ff, var(--primary));
+  box-shadow: 0 10px 24px rgba(67, 150, 255, 0.34);
 }
 
 .btn-primary:hover {
@@ -245,6 +311,7 @@ h1 {
   color: #d5e4ff;
   border-color: rgba(137, 166, 221, 0.42);
   background: rgba(56, 82, 126, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(83, 113, 171, 0.16);
 }
 
 .input-wrap {
@@ -398,6 +465,7 @@ h1 {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
   backdrop-filter: blur(12px);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.32);
 }
 
 .nav-link {
@@ -409,6 +477,12 @@ h1 {
   gap: 4px;
   padding: 7px 4px;
   font-size: 0.67rem;
+  transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.nav-link:hover {
+  transform: translateY(-1px);
+  color: #c4d8ff;
 }
 
 .nav-link.active {
@@ -418,6 +492,47 @@ h1 {
 
 .spin {
   animation: spin 1s linear infinite;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  45%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes floatOrbA {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(26px, 24px, 0);
+  }
+}
+
+@keyframes floatOrbB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-28px, -22px, 0);
+  }
 }
 
 @keyframes spin {

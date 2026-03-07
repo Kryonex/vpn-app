@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = Field(default=120, alias='JWT_EXPIRE_MINUTES')
 
     admin_bearer_token: str = Field(default='change_me_admin_token', alias='ADMIN_BEARER_TOKEN')
+    telegram_admin_id: int | None = Field(default=None, alias='TELEGRAM_ADMIN_ID')
+    payment_phone: str = Field(default='', alias='PAYMENT_PHONE')
 
     database_url: str = Field(default='postgresql+asyncpg://vpn:vpn@postgres:5432/vpn', alias='DATABASE_URL')
     redis_url: str = Field(default='redis://redis:6379/0', alias='REDIS_URL')
@@ -36,11 +38,6 @@ class Settings(BaseSettings):
 
     expiring_notify_days: int = Field(default=3, alias='EXPIRING_NOTIFY_DAYS')
     scheduler_interval_seconds: int = Field(default=120, alias='SCHEDULER_INTERVAL_SECONDS')
-
-    yookassa_shop_id: str = Field(default='', alias='YOOKASSA_SHOP_ID')
-    yookassa_secret_key: str = Field(default='', alias='YOOKASSA_SECRET_KEY')
-    yookassa_return_url: str = Field(default='', alias='YOOKASSA_RETURN_URL')
-    yookassa_currency: str = Field(default='RUB', alias='YOOKASSA_CURRENCY')
 
     threexui_base_url: str = Field(default='', alias='THREEXUI_BASE_URL')
     threexui_username: str = Field(default='', alias='THREEXUI_USERNAME')
