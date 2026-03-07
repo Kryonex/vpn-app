@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json
@@ -30,7 +30,10 @@ def extract_referral_code(message: Message) -> str | None:
     return start_arg
 
 
-def mini_app_keyboard() -> InlineKeyboardMarkup:
+def mini_app_keyboard() -> InlineKeyboardMarkup | None:
+    if not settings.mini_app_url:
+        return None
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -60,8 +63,8 @@ async def start_handler(message: Message) -> None:
         )
 
     text = (
-        'VPN сервис готов.\n\n'
-        'Открой Mini App, чтобы купить или продлить подписку, управлять ключами и смотреть платежи.'
+        'VPN service is ready.\n\n'
+        'Open Mini App to buy or renew subscription, manage keys and view payments.'
     )
     await message.answer(text, reply_markup=mini_app_keyboard())
 
@@ -88,9 +91,11 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
 
 async def main() -> None:
     if not settings.bot_token:
-        raise RuntimeError('BOT_TOKEN is not configured')
+        raise RuntimeError(
+            'BOT_TOKEN is not configured. Set BOT_TOKEN in environment variables or in .env before starting bot.'
+        )
     if not settings.mini_app_url:
-        raise RuntimeError('MINI_APP_URL is not configured')
+        logger.warning('MINI_APP_URL is not configured. /start will work without WebApp button.')
 
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()

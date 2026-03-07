@@ -17,12 +17,34 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-vpn_key_status = sa.Enum('active', 'expired', 'revoked', 'pending_payment', name='vpnkeystatus')
-subscription_status = sa.Enum('active', 'expired', 'revoked', 'pending_payment', name='subscriptionstatus')
-payment_status = sa.Enum('pending', 'waiting_for_capture', 'succeeded', 'canceled', 'failed', name='paymentstatus')
-payment_provider = sa.Enum('yookassa', name='paymentprovider')
-payment_operation = sa.Enum('purchase', 'renew', name='paymentoperation')
-referral_status = sa.Enum('pending', 'qualified', 'rewarded', 'rejected', name='referralstatus')
+vpn_key_status = postgresql.ENUM(
+    'active',
+    'expired',
+    'revoked',
+    'pending_payment',
+    name='vpnkeystatus',
+    create_type=False,
+)
+subscription_status = postgresql.ENUM(
+    'active',
+    'expired',
+    'revoked',
+    'pending_payment',
+    name='subscriptionstatus',
+    create_type=False,
+)
+payment_status = postgresql.ENUM(
+    'pending',
+    'waiting_for_capture',
+    'succeeded',
+    'canceled',
+    'failed',
+    name='paymentstatus',
+    create_type=False,
+)
+payment_provider = postgresql.ENUM('yookassa', name='paymentprovider', create_type=False)
+payment_operation = postgresql.ENUM('purchase', 'renew', name='paymentoperation', create_type=False)
+referral_status = postgresql.ENUM('pending', 'qualified', 'rewarded', 'rejected', name='referralstatus', create_type=False)
 
 
 def upgrade() -> None:
