@@ -1,19 +1,43 @@
+﻿import { CircleHelp, KeyRound, ShieldCheck, Wallet } from 'lucide-react';
+
+import { PageHeader } from '../components/PageHeader';
+
+const faq = [
+  {
+    icon: Wallet,
+    question: 'Как купить доступ?',
+    answer: 'Откройте раздел покупки, выберите тариф, оплатите и ключ появится в разделе «Мои ключи».',
+  },
+  {
+    icon: ShieldCheck,
+    question: 'Как работает продление?',
+    answer: 'Продление увеличивает срок существующего ключа и не создает новый ключ.',
+  },
+  {
+    icon: KeyRound,
+    question: 'Что значит перевыпуск?',
+    answer: 'Перевыпуск отключает старую версию ключа и создает новую для той же подписки.',
+  },
+  {
+    icon: CircleHelp,
+    question: 'Как подключить устройство?',
+    answer: 'Откройте детали ключа, скопируйте URI или отсканируйте QR-код в VPN-клиенте.',
+  },
+];
+
 export function HelpPage() {
   return (
     <section className="stack">
-      <h1>Help / FAQ</h1>
-      <article className="card">
-        <p className="value small">How to connect?</p>
-        <p className="label">1. Buy plan. 2. Open key details. 3. Copy URI or scan QR in your VPN app.</p>
-      </article>
-      <article className="card">
-        <p className="value small">How does renewal work?</p>
-        <p className="label">Renew extends the same key. No new key is created.</p>
-      </article>
-      <article className="card">
-        <p className="value small">How does rotation work?</p>
-        <p className="label">Rotation revokes old key version and creates a new key version for the same VPN key entity.</p>
-      </article>
+      <PageHeader title="Помощь" subtitle="Частые вопросы и быстрые ответы" />
+      {faq.map((item) => {
+        const Icon = item.icon;
+        return (
+          <article key={item.question} className="glass-card help-item">
+            <p className="title-line row-inline"><Icon size={16} /> {item.question}</p>
+            <p className="muted">{item.answer}</p>
+          </article>
+        );
+      })}
     </section>
   );
 }

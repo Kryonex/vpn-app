@@ -38,7 +38,7 @@ def mini_app_keyboard() -> InlineKeyboardMarkup | None:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='Open VPN App',
+                    text='Открыть VPN-приложение',
                     web_app=WebAppInfo(url=settings.mini_app_url),
                 )
             ]
@@ -63,8 +63,8 @@ async def start_handler(message: Message) -> None:
         )
 
     text = (
-        'VPN service is ready.\n\n'
-        'Open Mini App to buy or renew subscription, manage keys and view payments.'
+        'VPN-сервис готов к работе.\n\n'
+        'Откройте Mini App: там можно купить или продлить подписку, управлять ключами и смотреть платежи.'
     )
     await message.answer(text, reply_markup=mini_app_keyboard())
 
@@ -92,10 +92,10 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
 async def main() -> None:
     if not settings.bot_token:
         raise RuntimeError(
-            'BOT_TOKEN is not configured. Set BOT_TOKEN in environment variables or in .env before starting bot.'
+            'BOT_TOKEN не задан. Укажите BOT_TOKEN в переменных окружения или в .env перед запуском бота.'
         )
     if not settings.mini_app_url:
-        logger.warning('MINI_APP_URL is not configured. /start will work without WebApp button.')
+        logger.warning('MINI_APP_URL не задан. Команда /start будет работать без кнопки WebApp.')
 
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()

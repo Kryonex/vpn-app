@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
 import { initTelegramSDK } from '../telegram';
@@ -32,19 +32,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let token = localStorage.getItem('session_token');
         if (!token) {
-          // Important: send raw Telegram.WebApp.initData exactly as received.
-          // Do not reconstruct from initDataUnsafe.
+          // Важно: отправляем raw Telegram.WebApp.initData как есть.
+          // Не реконструируем строку из initDataUnsafe.
           const rawInitData = webApp?.initData;
-          const initData =
-            rawInitData ||
-            import.meta.env.VITE_DEV_INIT_DATA ||
-            '';
+          const initData = rawInitData || import.meta.env.VITE_DEV_INIT_DATA || '';
 
           if (!initData) {
-            throw new Error('No Telegram initData provided. Open app via Telegram or set VITE_DEV_INIT_DATA.');
+            throw new Error('Отсутствует Telegram initData. Откройте приложение через Telegram или задайте VITE_DEV_INIT_DATA.');
           }
 
-          const auth = await apiRequest<{ access_token: string }>('/auth/telegram',
+          const auth = await apiRequest<{ access_token: string }>(
+            '/auth/telegram',
             toJsonBody({ init_data: initData }),
           );
           token = auth.access_token;
@@ -55,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(null);
       } catch (err) {
         localStorage.removeItem('session_token');
-        const message = err instanceof Error ? err.message : 'Authentication failed';
+        const message = err instanceof Error ? err.message : 'Ошибка авторизации';
         setError(message);
       } finally {
         setIsLoading(false);

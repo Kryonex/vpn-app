@@ -1,60 +1,86 @@
+﻿import { CircleDollarSign, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { apiRequest, toJsonBody } from '../api/client';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
 import type { PaymentIntent, Plan } from '../types/models';
 
 export function RenewKeyPage() {
   const { keyId } = useParams<{ keyId: string }>();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [bonusDays, setBonusDays] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    apiRequest<Plan[]>('/plans').then(setPlans).catch((err) => {
-      setMessage(err instanceof Error ? err.message : 'Failed to load plans');
-    });
+    apiRequest<Plan[]>('/plans')
+      .then(setPlans)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить тарифы'))
+      .finally(() => setLoading(false));
   }, []);
 
   const renew = async (planId: string) => {
     if (!keyId) return;
-    const payment = await apiRequest<PaymentIntent>(
-      `/keys/${keyId}/renew`,
-      toJsonBody({ plan_id: planId, apply_bonus_days: bonusDays }),
-    );
-    if (payment.confirmation_url) {
-      const tg = window.Telegram?.WebApp;
-      if (tg?.openLink) {
-        tg.openLink(payment.confirmation_url);
-      } else {
-        window.open(payment.confirmation_url, '_blank');
+    try {
+      const payment = await apiRequest<PaymentIntent>(
+        `/keys/${keyId}/renew`,
+        toJsonBody({ plan_id: planId, apply_bonus_days: bonusDays }),
+      );
+      if (payment.confirmation_url) {
+        const tg = window.Telegram?.WebApp;
+        if (tg?.openLink) {
+          tg.openLink(payment.confirmation_url);
+        } else {
+          window.open(payment.confirmation_url, '_blank');
+        }
       }
+      setMessage('Сессия оплаты создана. После оплаты срок ключа будет продлен.');
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось создать платеж на продление');
     }
-    setMessage('Renewal payment created');
   };
 
   return (
     <section className="stack">
-      <h1>Renew Key</h1>
-      <article className="card">
-        <label className="label" htmlFor="bonus-days">Bonus days to apply</label>
-        <input
-          id="bonus-days"
-          className="input"
-          type="number"
-          value={bonusDays}
-          min={0}
-          onChange={(e) => setBonusDays(Number(e.target.value || 0))}
-        />
+      <PageHeader title="Продление ключа" subtitle="Продлите текущий ключ без перевыпуска" />
+
+      <article className="glass-card">
+        <label className="muted" htmlFor="bonus-days">Бонусных дней применить</label>
+        <div className="input-wrap">
+          <Sparkles size={16} />
+          <input
+            id="bonus-days"
+            className="input"
+            type="number"
+            value={bonusDays}
+            min={0}
+            onChange={(e) => setBonusDays(Number(e.target.value || 0))}
+          />
+        </div>
       </article>
-      {plans.map((plan) => (
-        <article key={plan.id} className="card">
-          <p className="value small">{plan.name}</p>
-          <p className="label">{plan.price} {plan.currency}</p>
-          <button className="btn" onClick={() => renew(plan.id)}>Renew</button>
+
+      {loading && <LoadingState text="Загружаем тарифы..." />}
+      {error && <ErrorState text={error} />}
+      {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов нет" text="Попробуйте позже." />}
+
+      {!loading && !error && plans.map((plan) => (
+        <article key={plan.id} className="glass-card plan-card">
+          <div className="row-between">
+            <p className="title-line">{plan.name}</p>
+            <p className="price-line">{plan.price} {plan.currency}</p>
+          </div>
+          <p className="muted">Длительность: {plan.duration_days} дней</p>
+          <button className="btn btn-primary" onClick={() => renew(plan.id)}>
+            <CircleDollarSign size={16} /> Оплатить продление
+          </button>
         </article>
       ))}
-      {message && <p className="ok">{message}</p>}
+
+      {message && <div className="toast-success">{message}</div>}
     </section>
   );
 }

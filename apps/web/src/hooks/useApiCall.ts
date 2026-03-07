@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 
 export function useApiCall<TArgs extends unknown[], TResult>(
   fn: (...args: TArgs) => Promise<TResult>,
@@ -12,7 +12,7 @@ export function useApiCall<TArgs extends unknown[], TResult>(
       setError(null);
       return await fn(...args);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed');
+      setError(err instanceof Error ? err.message : 'Ошибка запроса');
       return null;
     } finally {
       setIsLoading(false);

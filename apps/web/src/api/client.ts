@@ -1,4 +1,4 @@
-function trimTrailingSlashes(value: string): string {
+﻿function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
@@ -38,13 +38,14 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
       headers,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown network error';
-    throw new Error(`Network request failed for ${requestUrl}: ${message}`);
+    const message = error instanceof Error ? error.message : 'Неизвестная сетевая ошибка';
+    throw new Error(`Ошибка сети при запросе ${requestUrl}: ${message}`);
   }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const detail = typeof payload?.detail === 'string' ? payload.detail : `Request failed (${response.status})`;
+    const detail =
+      typeof payload?.detail === 'string' ? payload.detail : `Ошибка запроса (${response.status})`;
     throw new Error(detail);
   }
 
