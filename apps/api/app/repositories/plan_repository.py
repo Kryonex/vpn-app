@@ -18,6 +18,15 @@ class PlanRepository:
         result = await self.session.scalars(stmt)
         return result.all()
 
+    async def get_default_active_plan(self) -> Plan | None:
+        stmt = (
+            select(Plan)
+            .where(Plan.is_active.is_(True))
+            .order_by(Plan.sort_order.asc(), Plan.duration_days.asc())
+            .limit(1)
+        )
+        return await self.session.scalar(stmt)
+
     async def list_all(self) -> list[Plan]:
         stmt = select(Plan).order_by(Plan.sort_order.asc(), Plan.duration_days.asc())
         result = await self.session.scalars(stmt)

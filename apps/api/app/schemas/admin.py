@@ -108,3 +108,17 @@ class AdminReferralSettingsUpdateRequest(BaseModel):
 class AdminResetKeysEarningsRequest(BaseModel):
     confirm_text: str = Field(min_length=5, max_length=32)
 
+
+class AdminBindPanelKeyRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    display_name: str | None = Field(default=None, max_length=128)
+    client_uuid: str | None = Field(default=None, max_length=128)
+    inbound_id: int | None = None
+
+
+class AdminBindPanelKeyResponse(BaseModel):
+    key_id: UUID
+    version_id: UUID
+    owner_id: UUID
+    connection_uri: str | None
+

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import hashlib
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -18,6 +19,7 @@ from app.models.plan import Plan
 from app.models.referral_reward import ReferralReward
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.models.telegram_account import TelegramAccount
 from app.models.vpn_key import VPNKey
 from app.models.vpn_key_version import VPNKeyVersion
 from app.repositories.payment_repository import PaymentRepository
@@ -123,42 +125,144 @@ class AdminService:
         if confirm_text.strip().upper() != 'RESET':
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid confirmation text')
 
-        active_versions = (
-            await self.session.scalars(
-                select(VPNKeyVersion).where(VPNKeyVersion.is_active.is_(True))
+        now = datetime.now(timezone.utc)
+        keys_updated = (
+            await self.session.execute(
+                update(VPNKey).values(status=VPNKeyStatus.REVOKED, current_subscription_id=None)
             )
-        ).all()
-        for version in active_versions:
-            try:
-                await self.threexui_service.revoke_vpn_client(version)
-            except Exception:  # noqa: BLE001
-                # Continue local reset even if external revoke fails.
-                pass
-
+        ).rowcount or 0
+        subscriptions_updated = (
+            await self.session.execute(
+                update(Subscription).values(status=SubscriptionStatus.REVOKED)
+            )
+        ).rowcount or 0
+        versions_updated = (
+            await self.session.execute(
+                update(VPNKeyVersion).values(is_active=False, revoked_at=now, connection_uri=None)
+            )
+        ).rowcount or 0
+        payments_updated = (
+            await self.session.execute(
+                update(Payment).values(status=PaymentStatus.CANCELED, amount=0, processed_at=now)
+            )
+        ).rowcount or 0
         payment_events_deleted = (await self.session.execute(delete(PaymentEvent))).rowcount or 0
         bonus_ledger_deleted = (await self.session.execute(delete(BonusDayLedger))).rowcount or 0
         referral_rewards_deleted = (await self.session.execute(delete(ReferralReward))).rowcount or 0
-        payments_deleted = (await self.session.execute(delete(Payment))).rowcount or 0
-        versions_deleted = (await self.session.execute(delete(VPNKeyVersion))).rowcount or 0
-        subscriptions_deleted = (await self.session.execute(delete(Subscription))).rowcount or 0
-        keys_deleted = (await self.session.execute(delete(VPNKey))).rowcount or 0
-        users_updated = (
-            await self.session.execute(
-                update(User).values(bonus_days_balance=0)
-            )
-        ).rowcount or 0
+        users_updated = (await self.session.execute(update(User).values(bonus_days_balance=0))).rowcount or 0
 
         await self.session.commit()
         return {
-            'keys_deleted': int(keys_deleted),
-            'subscriptions_deleted': int(subscriptions_deleted),
-            'versions_deleted': int(versions_deleted),
-            'payments_deleted': int(payments_deleted),
+            'keys_revoked': int(keys_updated),
+            'subscriptions_revoked': int(subscriptions_updated),
+            'versions_deactivated': int(versions_updated),
+            'payments_zeroed': int(payments_updated),
             'payment_events_deleted': int(payment_events_deleted),
             'bonus_ledger_deleted': int(bonus_ledger_deleted),
             'referral_rewards_deleted': int(referral_rewards_deleted),
             'users_bonus_reset': int(users_updated),
         }
+
+    @staticmethod
+    def _placeholder_telegram_id_from_username(username: str) -> int:
+        normalized = username.lstrip('@').strip().lower()
+        digest = hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+        value = int(digest[:12], 16)
+        return -value
+
+    async def bind_panel_key_to_username(
+        self,
+        *,
+        username: str,
+        display_name: str | None = None,
+        client_uuid: str | None = None,
+        inbound_id: int | None = None,
+    ) -> tuple[VPNKeyVersion, UUID]:
+        normalized_username = username.lstrip('@').strip().lower()
+        if not normalized_username:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Username is required')
+
+        user = await self.user_repo.get_by_telegram_username(normalized_username)
+        if not user:
+            user = await self.user_repo.create_user()
+            placeholder_tg_id = self._placeholder_telegram_id_from_username(normalized_username)
+            self.session.add(
+                TelegramAccount(
+                    user_id=user.id,
+                    telegram_user_id=placeholder_tg_id,
+                    username=normalized_username,
+                    first_name=None,
+                    last_name=None,
+                    language_code=None,
+                    is_bot=False,
+                )
+            )
+            await self.session.flush()
+
+        if client_uuid:
+            snapshot = await self.threexui_service.client.get_client_snapshot(
+                inbound_id=inbound_id,
+                client_uuid=client_uuid,
+                email_remark=f'@{normalized_username}',
+            )
+            if not snapshot:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Panel client not found')
+            snapshots = [snapshot]
+        else:
+            snapshots = await self.threexui_service.list_clients_by_username(normalized_username)
+            if not snapshots:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No panel clients for username')
+
+        default_plan = await self.plan_repo.get_default_active_plan()
+        if not default_plan:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='No active plan configured')
+
+        picked = max(
+            snapshots,
+            key=lambda item: item.expires_at or datetime.now(timezone.utc),
+        )
+
+        if await self.key_repo.exists_by_client_uuid(picked.client_uuid):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Client is already linked')
+
+        now = datetime.now(timezone.utc)
+        expires_at = picked.expires_at or (now + timedelta(days=30))
+        sub_status = SubscriptionStatus.ACTIVE if expires_at > now and (picked.is_active is not False) else SubscriptionStatus.EXPIRED
+        key_status = VPNKeyStatus.ACTIVE if sub_status == SubscriptionStatus.ACTIVE else VPNKeyStatus.EXPIRED
+
+        key = await self.key_repo.create(
+            owner_id=user.id,
+            display_name=display_name or f'VPN @{normalized_username}',
+        )
+
+        subscription = Subscription(
+            vpn_key_id=key.id,
+            plan_id=default_plan.id,
+            starts_at=now,
+            expires_at=expires_at,
+            status=sub_status,
+        )
+        self.session.add(subscription)
+        await self.session.flush()
+
+        key.current_subscription_id = subscription.id
+        key.status = key_status
+
+        version = VPNKeyVersion(
+            vpn_key_id=key.id,
+            version=1,
+            threexui_client_uuid=picked.client_uuid,
+            inbound_id=picked.inbound_id,
+            email_remark=picked.email_remark or f'@{normalized_username}',
+            connection_uri=picked.connection_uri,
+            raw_config=picked.raw,
+            is_active=sub_status == SubscriptionStatus.ACTIVE,
+            revoked_at=None if sub_status == SubscriptionStatus.ACTIVE else now,
+        )
+        self.session.add(version)
+        await self.session.commit()
+        await self.session.refresh(version)
+        return version, user.id
 
     async def create_plan(
         self,

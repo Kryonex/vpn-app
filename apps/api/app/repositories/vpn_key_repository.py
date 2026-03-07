@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -74,4 +74,13 @@ class VPNKeyRepository:
             .limit(1)
         )
         return await self.session.scalar(stmt)
+
+    async def count_by_owner(self, owner_id: UUID) -> int:
+        stmt = select(func.count(VPNKey.id)).where(VPNKey.owner_id == owner_id)
+        return int((await self.session.scalar(stmt)) or 0)
+
+    async def exists_by_client_uuid(self, client_uuid: str) -> bool:
+        stmt = select(VPNKeyVersion.id).where(VPNKeyVersion.threexui_client_uuid == client_uuid).limit(1)
+        found = await self.session.scalar(stmt)
+        return found is not None
 

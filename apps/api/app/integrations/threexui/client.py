@@ -87,6 +87,34 @@ class ThreeXUIClient:
 
         return None
 
+    @staticmethod
+    def _extract_expiry_time(client_obj: dict[str, Any]) -> datetime | None:
+        raw = client_obj.get('expiryTime')
+        if raw in (None, 0, '0', ''):
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        # 3x-ui usually returns milliseconds.
+        if value > 10_000_000_000:
+            value = value // 1000
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _extract_enable_flag(client_obj: dict[str, Any]) -> bool | None:
+        value = client_obj.get('enable')
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.lower() in {'true', '1', 'yes'}
+        return None
+
     def _build_subscription_url(self, sub_id: str | None, client_uuid: str) -> str | None:
         base = (self.settings.threexui_public_base_url or self.base_url).strip()
         if not base:
@@ -316,6 +344,8 @@ class ThreeXUIClient:
                     inbound_id=inbound_value_int,
                     email_remark=row_email or email_remark,
                     sub_id=sub_id,
+                    expires_at=self._extract_expiry_time(client),
+                    is_active=self._extract_enable_flag(client),
                     connection_uri=connection_uri,
                     raw={'inbound': inbound, 'client': client},
                 )
@@ -329,11 +359,56 @@ class ThreeXUIClient:
                     inbound_id=inbound_id,
                     email_remark=email_remark,
                     sub_id=fallback_sub_id,
+                    expires_at=None,
+                    is_active=None,
                     connection_uri=connection_uri,
                     raw={'traffic': info},
                 )
 
         return None
+
+    async def list_client_snapshots_by_username(self, username: str) -> list[ThreeXUIPanelClientSnapshot]:
+        normalized = username.lstrip('@').strip().lower()
+        if not normalized:
+            return []
+
+        tag = f'@{normalized}'
+        inbounds = await self.get_inbounds_raw()
+        result: list[ThreeXUIPanelClientSnapshot] = []
+
+        for inbound in inbounds:
+            inbound_id_raw = inbound.get('id')
+            inbound_id = inbound_id_raw if isinstance(inbound_id_raw, int) else None
+            clients = self._extract_clients_from_inbound(inbound)
+            for client in clients:
+                email = str(client.get('email') or '').strip()
+                if not email:
+                    continue
+                if tag not in email.lower() and normalized not in email.lower():
+                    continue
+
+                sub_id = str(client.get('subId') or client.get('sub_id') or '').strip() or None
+                connection_uri = (
+                    self._extract_connection_uri(client)
+                    or self._extract_connection_uri(inbound)
+                    or self._build_subscription_url(sub_id=sub_id, client_uuid=str(client.get('id') or ''))
+                    or self._build_vless_uri_from_panel(inbound, client)
+                )
+
+                result.append(
+                    ThreeXUIPanelClientSnapshot(
+                        client_uuid=str(client.get('id') or ''),
+                        inbound_id=inbound_id,
+                        email_remark=email or None,
+                        sub_id=sub_id,
+                        expires_at=self._extract_expiry_time(client),
+                        is_active=self._extract_enable_flag(client),
+                        connection_uri=connection_uri,
+                        raw={'inbound': inbound, 'client': client},
+                    )
+                )
+
+        return [item for item in result if item.client_uuid]
 
     async def add_client(
         self,

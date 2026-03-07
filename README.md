@@ -184,6 +184,8 @@ docker compose up -d --build
 - Renew extends existing key/subscription; rotate creates a new key version.
 - Payment flow: user creates payment request, transfers money to `PAYMENT_PHONE`, admin confirms payment in `/admin/payments/{payment_id}/approve`.
 - Admin can manage tariffs via `/admin/plans` (`GET`, `POST`, `PATCH /admin/plans/{plan_id}`).
+- Admin can pre-bind an existing panel client to a Telegram username via `/admin/keys/bind-by-username`.
+- Soft reset endpoint `/admin/system/reset-keys-and-earnings` now revokes/deactivates keys and zeroes earnings data without hard-deleting user/tariff records.
 - В Mini App есть раздел «Админ» (виден при совпадении `VITE_TELEGRAM_ADMIN_ID` и Telegram user id).
 - 3x-ui sync:
   - key listing/details perform on-demand sync with panel

@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timezone
 
 from app.integrations.threexui.client import ThreeXUIClient
-from app.integrations.threexui.models import ThreeXUICreatedClient
+from app.integrations.threexui.models import ThreeXUICreatedClient, ThreeXUIPanelClientSnapshot
 from app.models.enums import SubscriptionStatus, VPNKeyStatus
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -21,6 +21,9 @@ class ThreeXUIService:
 
     async def fetch_inbounds(self):
         return await self.client.get_inbounds()
+
+    async def list_clients_by_username(self, username: str) -> list[ThreeXUIPanelClientSnapshot]:
+        return await self.client.list_client_snapshots_by_username(username)
 
     @staticmethod
     def _sanitize_label(value: str) -> str:

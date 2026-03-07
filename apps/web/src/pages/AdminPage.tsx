@@ -19,6 +19,12 @@ type AdminStats = {
 type ReferralSettings = {
   referral_bonus_days: number;
 };
+type BindPanelKeyResponse = {
+  key_id: string;
+  version_id: string;
+  owner_id: string;
+  connection_uri: string | null;
+};
 
 type PlanForm = {
   name: string;
@@ -48,6 +54,9 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<PlanForm>(defaultPlanForm);
   const [editing, setEditing] = useState<Record<string, PlanForm>>({});
+  const [bindUsername, setBindUsername] = useState('');
+  const [bindClientUuid, setBindClientUuid] = useState('');
+  const [bindInboundId, setBindInboundId] = useState('');
 
   const pendingPayments = useMemo(
     () => payments.filter((payment) => payment.status === 'pending' || payment.status === 'waiting_for_capture'),
@@ -158,16 +167,38 @@ export function AdminPage() {
     try {
       const result = await apiRequest<{
         ok: boolean;
-        keys_deleted: number;
-        payments_deleted: number;
+        keys_revoked: number;
+        payments_zeroed: number;
       }>('/admin/system/reset-keys-and-earnings', toJsonBody({ confirm_text: confirmText }));
 
       if (result.ok) {
-        setMessage(`Сброс выполнен. Удалено ключей: ${result.keys_deleted}, платежей: ${result.payments_deleted}.`);
+        setMessage(`Сброс выполнен. Отозвано ключей: ${result.keys_revoked}, обнулено платежей: ${result.payments_zeroed}.`);
         await loadData();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось выполнить сброс данных');
+    }
+  };
+
+  const bindPanelKey = async () => {
+    try {
+      const payload = {
+        username: bindUsername,
+        client_uuid: bindClientUuid || null,
+        inbound_id: bindInboundId ? Number(bindInboundId) : null,
+      };
+      const result = await apiRequest<BindPanelKeyResponse>('/admin/keys/bind-by-username', toJsonBody(payload));
+      setMessage(
+        `Ключ привязан к @${bindUsername.replace('@', '')}. key_id=${result.key_id}${
+          result.connection_uri ? `, uri=${result.connection_uri}` : ''
+        }`,
+      );
+      setBindUsername('');
+      setBindClientUuid('');
+      setBindInboundId('');
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось привязать ключ из панели');
     }
   };
 
@@ -228,9 +259,38 @@ export function AdminPage() {
 
       <article className="glass-card">
         <p className="title-line">Системный сброс</p>
-        <p className="muted">Полностью очищает данные о ключах, подписках, платежах и заработке. Пользователи и тарифы остаются.</p>
-        <button className="btn btn-danger" onClick={() => void resetKeysAndEarnings()}>
-          Обнулить базу ключей и заработка
+        <p className="muted">Мягкий сброс: ключи/подписки/платежи переводятся в неактивное состояние, история пользователей и тарифы сохраняются.</p>
+        <button className="btn btn-soft" onClick={() => void resetKeysAndEarnings()}>
+          Мягко обнулить ключи и заработок
+        </button>
+      </article>
+
+      <article className="glass-card">
+        <p className="title-line">Привязка ключа из панели к @user</p>
+        <p className="muted">Позволяет импортировать клиентский ключ из 3x-ui до первого входа пользователя в бота.</p>
+        <div className="admin-grid">
+          <input
+            className="input"
+            placeholder="@username"
+            value={bindUsername}
+            onChange={(e) => setBindUsername(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="client_uuid (необязательно)"
+            value={bindClientUuid}
+            onChange={(e) => setBindClientUuid(e.target.value)}
+          />
+          <input
+            className="input"
+            type="number"
+            placeholder="inbound_id (необязательно)"
+            value={bindInboundId}
+            onChange={(e) => setBindInboundId(e.target.value)}
+          />
+        </div>
+        <button className="btn btn-primary" onClick={() => void bindPanelKey()}>
+          Привязать ключ к пользователю
         </button>
       </article>
 

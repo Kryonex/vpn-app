@@ -35,6 +35,18 @@ class UserRepository:
         )
         return await self.session.scalar(stmt)
 
+    async def get_by_telegram_username(self, username: str) -> User | None:
+        normalized = username.lstrip('@').strip().lower()
+        if not normalized:
+            return None
+        stmt = (
+            select(User)
+            .join(TelegramAccount, TelegramAccount.user_id == User.id)
+            .where(func.lower(TelegramAccount.username) == normalized)
+            .options(selectinload(User.telegram_account))
+        )
+        return await self.session.scalar(stmt)
+
     async def get_by_referral_code(self, code: str) -> User | None:
         stmt = select(User).where(func.lower(User.referral_code) == code.lower())
         return await self.session.scalar(stmt)

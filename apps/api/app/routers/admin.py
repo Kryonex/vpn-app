@@ -13,6 +13,8 @@ from app.db.session import get_session
 from app.integrations.threexui.service import ThreeXUIService
 from app.schemas.admin import (
     AdminBonusDaysRequest,
+    AdminBindPanelKeyRequest,
+    AdminBindPanelKeyResponse,
     AdminGrantSubscriptionRequest,
     AdminKeyOut,
     AdminPaymentDecisionRequest,
@@ -176,6 +178,27 @@ async def admin_reset_keys_and_earnings(
     service = AdminService(session, threexui_service)
     stats = await service.reset_keys_and_earnings(payload.confirm_text)
     return {'ok': True, **stats}
+
+
+@router.post('/keys/bind-by-username', response_model=AdminBindPanelKeyResponse)
+async def admin_bind_panel_key_by_username(
+    payload: AdminBindPanelKeyRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    version, owner_id = await service.bind_panel_key_to_username(
+        username=payload.username,
+        display_name=payload.display_name,
+        client_uuid=payload.client_uuid,
+        inbound_id=payload.inbound_id,
+    )
+    return AdminBindPanelKeyResponse(
+        key_id=version.vpn_key_id,
+        version_id=version.id,
+        owner_id=owner_id,
+        connection_uri=version.connection_uri,
+    )
 
 
 @router.post('/plans')

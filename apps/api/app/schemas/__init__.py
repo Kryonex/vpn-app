@@ -1,5 +1,7 @@
 from app.schemas.admin import (
     AdminBonusDaysRequest,
+    AdminBindPanelKeyRequest,
+    AdminBindPanelKeyResponse,
     AdminGrantSubscriptionRequest,
     AdminKeyOut,
     AdminPaymentDecisionRequest,
@@ -38,6 +40,8 @@ __all__ = [
     'PaymentIntentOut',
     'ReferralMeOut',
     'AdminBonusDaysRequest',
+    'AdminBindPanelKeyRequest',
+    'AdminBindPanelKeyResponse',
     'AdminGrantSubscriptionRequest',
     'AdminKeyOut',
     'AdminPaymentDecisionRequest',
