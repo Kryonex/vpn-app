@@ -1,0 +1,145 @@
+:root {
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  color: #f2f6f8;
+  background: radial-gradient(circle at top right, #164e63 0%, #0f172a 52%, #020617 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px 16px 90px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 24px;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.highlight {
+  background: linear-gradient(145deg, rgba(14, 116, 144, 0.8), rgba(12, 74, 110, 0.86));
+}
+
+.label {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.value {
+  margin: 4px 0 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.value.small {
+  font-size: 20px;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.btn {
+  background: #0891b2;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.btn.secondary {
+  background: #334155;
+}
+
+.mono {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  word-break: break-all;
+  margin: 8px 0;
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: min(520px, 100%);
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  background: rgba(2, 6, 23, 0.94);
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 6px;
+}
+
+.nav-link {
+  color: #94a3b8;
+  text-decoration: none;
+  text-align: center;
+  font-size: 11px;
+  padding: 8px 4px;
+  border-radius: 8px;
+}
+
+.nav-link.active {
+  color: #e2e8f0;
+  background: rgba(14, 116, 144, 0.45);
+}
+
+.input {
+  width: 100%;
+  margin-top: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.error {
+  color: #fb7185;
+}
+
+.ok {
+  color: #22c55e;
+}
+
+.qr-wrap {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
