@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import ReferralStatus
+from app.models.enums import ReferralStatus, db_enum
 
 if TYPE_CHECKING:
     from app.models.referral_reward import ReferralReward
@@ -23,7 +23,11 @@ class Referral(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     referrer_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     referred_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    status: Mapped[ReferralStatus] = mapped_column(nullable=False, default=ReferralStatus.PENDING)
+    status: Mapped[ReferralStatus] = mapped_column(
+        db_enum(ReferralStatus, name='referralstatus'),
+        nullable=False,
+        default=ReferralStatus.PENDING,
+    )
     qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rewarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

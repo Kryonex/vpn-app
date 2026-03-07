@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import PaymentOperation, PaymentProvider, PaymentStatus
+from app.models.enums import PaymentOperation, PaymentProvider, PaymentStatus, db_enum
 
 if TYPE_CHECKING:
     from app.models.payment_event import PaymentEvent
@@ -26,12 +26,23 @@ class Payment(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     vpn_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey('vpn_keys.id', ondelete='SET NULL'))
     plan_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('plans.id', ondelete='RESTRICT'), nullable=False)
-    provider: Mapped[PaymentProvider] = mapped_column(nullable=False, default=PaymentProvider.YOOKASSA)
-    operation: Mapped[PaymentOperation] = mapped_column(nullable=False)
+    provider: Mapped[PaymentProvider] = mapped_column(
+        db_enum(PaymentProvider, name='paymentprovider'),
+        nullable=False,
+        default=PaymentProvider.YOOKASSA,
+    )
+    operation: Mapped[PaymentOperation] = mapped_column(
+        db_enum(PaymentOperation, name='paymentoperation'),
+        nullable=False,
+    )
     external_payment_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), nullable=False)
-    status: Mapped[PaymentStatus] = mapped_column(nullable=False, default=PaymentStatus.PENDING)
+    status: Mapped[PaymentStatus] = mapped_column(
+        db_enum(PaymentStatus, name='paymentstatus'),
+        nullable=False,
+        default=PaymentStatus.PENDING,
+    )
     confirmation_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     idempotence_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     bonus_days_applied: Mapped[int] = mapped_column(nullable=False, default=0)

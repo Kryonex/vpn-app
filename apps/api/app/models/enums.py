@@ -1,4 +1,9 @@
 from enum import Enum
+from typing import TypeVar
+
+import sqlalchemy as sa
+
+EnumT = TypeVar('EnumT', bound=Enum)
 
 
 class VPNKeyStatus(str, Enum):
@@ -37,4 +42,14 @@ class ReferralStatus(str, Enum):
     QUALIFIED = 'qualified'
     REWARDED = 'rewarded'
     REJECTED = 'rejected'
+
+
+def db_enum(enum_cls: type[EnumT], *, name: str) -> sa.Enum:
+    return sa.Enum(
+        enum_cls,
+        name=name,
+        values_callable=lambda members: [item.value for item in members],
+        native_enum=True,
+        validate_strings=True,
+    )
 

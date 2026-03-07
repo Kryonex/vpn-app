@@ -125,13 +125,18 @@ def create_access_token(subject: str) -> str:
         'iat': int(now.timestamp()),
         'exp': int(exp.timestamp()),
     }
-    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    logger.info('JWT issued | sub_present=%s exp_unix=%s', bool(subject), payload['exp'])
+    return token
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        logger.info('JWT decoded | sub_present=%s', bool(payload.get('sub')))
+        return payload
     except jwt.PyJWTError as exc:
+        logger.warning('JWT decode failed: %s', type(exc).__name__)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token') from exc
 

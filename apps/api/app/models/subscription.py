@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import SubscriptionStatus
+from app.models.enums import SubscriptionStatus, db_enum
 
 if TYPE_CHECKING:
     from app.models.plan import Plan
@@ -24,7 +24,11 @@ class Subscription(Base):
     plan_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('plans.id', ondelete='RESTRICT'), nullable=False)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    status: Mapped[SubscriptionStatus] = mapped_column(nullable=False, default=SubscriptionStatus.ACTIVE)
+    status: Mapped[SubscriptionStatus] = mapped_column(
+        db_enum(SubscriptionStatus, name='subscriptionstatus'),
+        nullable=False,
+        default=SubscriptionStatus.ACTIVE,
+    )
     notified_expiring_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notified_expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

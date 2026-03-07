@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -16,10 +17,12 @@ from app.models.vpn_key import VPNKey
 from app.schemas.user import MeResponse
 
 router = APIRouter(tags=['me'])
+logger = logging.getLogger(__name__)
 
 
 @router.get('/me', response_model=MeResponse)
 async def me(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> MeResponse:
+    logger.info('GET /me reached for authenticated user')
     invited_count_stmt = select(func.count(Referral.id)).where(Referral.referrer_user_id == current_user.id)
     invited_count = int((await session.scalar(invited_count_stmt)) or 0)
 

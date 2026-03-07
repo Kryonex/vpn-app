@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import VPNKeyStatus
+from app.models.enums import VPNKeyStatus, db_enum
 
 if TYPE_CHECKING:
     from app.models.payment import Payment
@@ -23,7 +23,11 @@ class VPNKey(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    status: Mapped[VPNKeyStatus] = mapped_column(nullable=False, default=VPNKeyStatus.PENDING_PAYMENT)
+    status: Mapped[VPNKeyStatus] = mapped_column(
+        db_enum(VPNKeyStatus, name='vpnkeystatus'),
+        nullable=False,
+        default=VPNKeyStatus.PENDING_PAYMENT,
+    )
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, default='My VPN Key')
     current_subscription_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

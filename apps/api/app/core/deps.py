@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import timezone, datetime
 from typing import Annotated
 from uuid import UUID
@@ -17,6 +18,7 @@ from app.db.session import get_session
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 async def get_current_user(
@@ -24,17 +26,21 @@ async def get_current_user(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     if not credentials:
+        logger.warning('Auth bearer missing')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing auth token')
 
     payload = decode_access_token(credentials.credentials)
     subject = payload.get('sub')
     if not subject:
+        logger.warning('Auth token decoded but sub missing')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid token payload')
 
     user_id = UUID(subject)
     user = await session.scalar(select(User).where(User.id == user_id))
     if not user:
+        logger.warning('Auth user not found for token subject')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
+    logger.info('Auth user resolved')
     return user
 
 
