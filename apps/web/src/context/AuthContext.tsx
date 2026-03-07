@@ -32,8 +32,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let token = localStorage.getItem('session_token');
         if (!token) {
+          // Important: send raw Telegram.WebApp.initData exactly as received.
+          // Do not reconstruct from initDataUnsafe.
+          const rawInitData = webApp?.initData;
           const initData =
-            webApp?.initData ||
+            rawInitData ||
             import.meta.env.VITE_DEV_INIT_DATA ||
             '';
 
