@@ -336,6 +336,32 @@ h1 {
   outline: none;
 }
 
+.input::placeholder {
+  color: #7f91b7;
+}
+
+.admin-grid {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-item {
+  border-radius: 12px;
+  border: 1px solid rgba(124, 148, 199, 0.28);
+  background: rgba(12, 18, 32, 0.5);
+  padding: 10px;
+}
+
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-top: 6px;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -462,7 +488,7 @@ h1 {
   border-top: 1px solid rgba(122, 147, 194, 0.33);
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
   gap: 6px;
   backdrop-filter: blur(12px);
   box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.32);
@@ -554,6 +580,6 @@ h1 {
   }
 
   .bottom-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

@@ -57,6 +57,7 @@ Required variables:
 - `JWT_SECRET`
 - `ADMIN_BEARER_TOKEN`
 - `TELEGRAM_ADMIN_ID` (optional, admin access via Telegram JWT)
+- `VITE_TELEGRAM_ADMIN_ID` (optional, to display admin section in Mini App)
 - `PAYMENT_PHONE` (required for manual transfer flow)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `DATABASE_URL` (must match postgres credentials)
@@ -176,4 +177,5 @@ docker compose up -d --build
 - Renew extends existing key/subscription; rotate creates a new key version.
 - Payment flow: user creates payment request, transfers money to `PAYMENT_PHONE`, admin confirms payment in `/admin/payments/{payment_id}/approve`.
 - Admin can manage tariffs via `/admin/plans` (`GET`, `POST`, `PATCH /admin/plans/{plan_id}`).
+- В Mini App есть раздел «Админ» (виден при совпадении `VITE_TELEGRAM_ADMIN_ID` и Telegram user id).
 - Secrets are loaded from environment variables only.

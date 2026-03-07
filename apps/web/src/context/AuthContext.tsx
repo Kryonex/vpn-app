@@ -7,6 +7,7 @@ import type { MeResponse } from '../types/models';
 type AuthState = {
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   me: MeResponse | null;
   error: string | null;
   refreshMe: () => Promise<void>;
@@ -67,6 +68,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isLoading,
       isAuthenticated: Boolean(me),
+      isAdmin:
+        Boolean(me?.telegram?.telegram_user_id) &&
+        Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0) > 0 &&
+        me?.telegram?.telegram_user_id === Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0),
       me,
       error,
       refreshMe,

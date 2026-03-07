@@ -6,6 +6,7 @@ import { useAuth } from './context/AuthContext';
 import { BuyPlanPage } from './pages/BuyPlanPage';
 import { HelpPage } from './pages/HelpPage';
 import { HomePage } from './pages/HomePage';
+import { AdminPage } from './pages/AdminPage';
 import { KeyDetailsPage } from './pages/KeyDetailsPage';
 import { KeysPage } from './pages/KeysPage';
 import { PaymentsPage } from './pages/PaymentsPage';
@@ -13,7 +14,7 @@ import { ReferralsPage } from './pages/ReferralsPage';
 import { RenewKeyPage } from './pages/RenewKeyPage';
 
 export default function App() {
-  const { isLoading, isAuthenticated, error } = useAuth();
+  const { isLoading, isAuthenticated, isAdmin, error } = useAuth();
 
   if (isLoading) {
     return (
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/payments" element={<PaymentsPage />} />
         <Route path="/referrals" element={<ReferralsPage />} />
         <Route path="/help" element={<HelpPage />} />
+        <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />
