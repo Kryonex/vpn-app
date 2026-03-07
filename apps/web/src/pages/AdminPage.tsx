@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, CircleSlash2, Plus, RefreshCw, Settings2 } from 'lucide-react';
+﻿import { CheckCircle2, CircleSlash2, Plus, RefreshCw, Settings2, TrendingUp, Gift } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
@@ -8,6 +8,17 @@ import type { Payment, Plan } from '../types/models';
 
 type AdminPaymentsResponse = { items: Payment[] };
 type AdminPlansResponse = { items: Plan[] };
+type AdminStats = {
+  total_payments: number;
+  succeeded_payments: number;
+  pending_payments: number;
+  failed_payments: number;
+  total_revenue: string;
+  month_revenue: string;
+};
+type ReferralSettings = {
+  referral_bonus_days: number;
+};
 
 type PlanForm = {
   name: string;
@@ -30,6 +41,8 @@ const defaultPlanForm: PlanForm = {
 export function AdminPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [referralBonusDays, setReferralBonusDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -44,12 +57,17 @@ export function AdminPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [plansData, paymentsData] = await Promise.all([
+      const [plansData, paymentsData, statsData, referralSettings] = await Promise.all([
         apiRequest<AdminPlansResponse>('/admin/plans'),
         apiRequest<AdminPaymentsResponse>('/admin/payments?limit=200'),
+        apiRequest<AdminStats>('/admin/stats'),
+        apiRequest<ReferralSettings>('/admin/settings/referral'),
       ]);
       setPlans(plansData.items);
       setPayments(paymentsData.items);
+      setStats(statsData);
+      setReferralBonusDays(referralSettings.referral_bonus_days);
+
       const editState: Record<string, PlanForm> = {};
       plansData.items.forEach((plan) => {
         editState[plan.id] = {
@@ -120,6 +138,19 @@ export function AdminPage() {
     }
   };
 
+  const saveReferralSettings = async () => {
+    try {
+      await apiRequest('/admin/settings/referral', {
+        method: 'PATCH',
+        body: JSON.stringify({ referral_bonus_days: referralBonusDays }),
+      });
+      setMessage('Настройка реферальной награды сохранена');
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить настройку рефералки');
+    }
+  };
+
   if (loading) {
     return <LoadingState text="Загружаем админ-панель..." />;
   }
@@ -130,7 +161,50 @@ export function AdminPage() {
 
   return (
     <section className="stack">
-      <PageHeader title="Админ-панель" subtitle="Подтверждение оплат и управление тарифами" />
+      <PageHeader title="Админ-панель" subtitle="Платежи, статистика, тарифы и рефералы" />
+
+      {stats && (
+        <div className="stat-grid">
+          <article className="glass-card stat-card">
+            <span className="stat-icon"><TrendingUp size={16} /></span>
+            <p className="stat-label">Выручка всего</p>
+            <p className="stat-value">{stats.total_revenue} ₽</p>
+          </article>
+          <article className="glass-card stat-card">
+            <span className="stat-icon"><TrendingUp size={16} /></span>
+            <p className="stat-label">Выручка за месяц</p>
+            <p className="stat-value">{stats.month_revenue} ₽</p>
+          </article>
+          <article className="glass-card stat-card">
+            <span className="stat-icon"><Settings2 size={16} /></span>
+            <p className="stat-label">Успешных оплат</p>
+            <p className="stat-value">{stats.succeeded_payments}</p>
+          </article>
+          <article className="glass-card stat-card">
+            <span className="stat-icon"><Settings2 size={16} /></span>
+            <p className="stat-label">Ожидают</p>
+            <p className="stat-value">{stats.pending_payments}</p>
+          </article>
+        </div>
+      )}
+
+      <article className="glass-card">
+        <p className="title-line row-inline"><Gift size={16} /> Реферальная награда</p>
+        <p className="muted">Количество бонусных дней за первую успешную оплату приглашенного пользователя</p>
+        <div className="admin-grid">
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={3650}
+            value={referralBonusDays}
+            onChange={(e) => setReferralBonusDays(Number(e.target.value || 0))}
+          />
+        </div>
+        <button className="btn btn-primary" onClick={() => void saveReferralSettings()}>
+          Сохранить реферальную награду
+        </button>
+      </article>
 
       <article className="glass-card">
         <div className="row-between">

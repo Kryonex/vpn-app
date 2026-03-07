@@ -1,3 +1,4 @@
+from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditLog
 from app.models.bonus_day_ledger import BonusDayLedger
 from app.models.enums import (
@@ -21,6 +22,7 @@ from app.models.vpn_key_version import VPNKeyVersion
 
 __all__ = [
     'AuditLog',
+    'AppSetting',
     'BonusDayLedger',
     'Payment',
     'PaymentEvent',

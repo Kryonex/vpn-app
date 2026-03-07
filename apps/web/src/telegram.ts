@@ -1,6 +1,17 @@
+export type TGUser = {
+  id: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  photo_url?: string;
+};
+
 export type TGWebApp = {
   initData: string;
-  initDataUnsafe?: Record<string, unknown>;
+  initDataUnsafe?: {
+    user?: TGUser;
+    [key: string]: unknown;
+  };
   ready: () => void;
   expand: () => void;
   close: () => void;

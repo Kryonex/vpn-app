@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
+from app.models.app_setting import AppSetting
 from app.db.session import SessionLocal
 from app.models.plan import Plan
 
@@ -17,12 +19,24 @@ DEFAULT_PLANS = [
 
 
 async def seed() -> None:
+    settings = get_settings()
     async with SessionLocal() as session:
         for plan_data in DEFAULT_PLANS:
             existing = await session.scalar(select(Plan).where(Plan.name == plan_data['name']))
             if existing:
                 continue
             session.add(Plan(**plan_data, is_active=True))
+
+        referral_setting = await session.scalar(
+            select(AppSetting).where(AppSetting.key == 'referral_bonus_days')
+        )
+        if not referral_setting:
+            session.add(
+                AppSetting(
+                    key='referral_bonus_days',
+                    value=str(settings.referral_bonus_days),
+                )
+            )
 
         await session.commit()
 

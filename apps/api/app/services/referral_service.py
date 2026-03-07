@@ -14,6 +14,7 @@ from app.models.referral import Referral
 from app.models.referral_reward import ReferralReward
 from app.models.user import User
 from app.repositories.payment_repository import PaymentRepository
+from app.repositories.app_settings_repository import AppSettingsRepository
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.user_repository import UserRepository
 
@@ -25,6 +26,7 @@ class ReferralService:
         self.user_repo = UserRepository(session)
         self.payment_repo = PaymentRepository(session)
         self.referral_repo = ReferralRepository(session)
+        self.app_settings_repo = AppSettingsRepository(session)
 
     @staticmethod
     def normalize_referral_code(raw: str | None) -> str | None:
@@ -58,7 +60,7 @@ class ReferralService:
         if succeeded_count != 1:
             return
 
-        bonus_days = self.settings.referral_bonus_days
+        bonus_days = await self.get_referral_bonus_days()
         referrer = await self.session.scalar(select(User).where(User.id == referral.referrer_user_id).with_for_update())
         if not referrer:
             return
@@ -111,4 +113,14 @@ class ReferralService:
             balance_after=new_balance,
         )
         self.session.add(ledger)
+
+    async def get_referral_bonus_days(self) -> int:
+        stored = await self.app_settings_repo.get('referral_bonus_days')
+        if not stored:
+            return self.settings.referral_bonus_days
+        try:
+            value = int(stored.value)
+        except ValueError:
+            return self.settings.referral_bonus_days
+        return max(value, 0)
 

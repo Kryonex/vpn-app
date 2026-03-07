@@ -1,13 +1,14 @@
 ﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
-import { initTelegramSDK } from '../telegram';
+import { initTelegramSDK, type TGUser } from '../telegram';
 import type { MeResponse } from '../types/models';
 
 type AuthState = {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  telegramProfile: TGUser | null;
   me: MeResponse | null;
   error: string | null;
   refreshMe: () => Promise<void>;
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [telegramProfile, setTelegramProfile] = useState<TGUser | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshMe = async () => {
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setIsLoading(true);
         const webApp = initTelegramSDK();
+        setTelegramProfile(webApp?.initDataUnsafe?.user ?? null);
 
         let token = localStorage.getItem('session_token');
         if (!token) {
@@ -72,11 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Boolean(me?.telegram?.telegram_user_id) &&
         Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0) > 0 &&
         me?.telegram?.telegram_user_id === Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0),
+      telegramProfile,
       me,
       error,
       refreshMe,
     }),
-    [isLoading, me, error],
+    [isLoading, me, error, telegramProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

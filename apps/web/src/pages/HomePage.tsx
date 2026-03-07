@@ -6,7 +6,7 @@ import { EmptyState } from '../components/StateCards';
 import { useAuth } from '../context/AuthContext';
 
 export function HomePage() {
-  const { me } = useAuth();
+  const { me, telegramProfile } = useAuth();
 
   if (!me) {
     return <EmptyState title="Нет данных профиля" text="Переоткройте Mini App." />;
@@ -15,12 +15,30 @@ export function HomePage() {
   const nearestExpiry = me.nearest_expiry
     ? new Date(me.nearest_expiry).toLocaleString()
     : 'Нет активных подписок';
+  const displayName =
+    telegramProfile?.first_name ||
+    me.telegram?.first_name ||
+    me.telegram?.username ||
+    'Пользователь';
+  const username = telegramProfile?.username || me.telegram?.username || null;
+  const avatar = telegramProfile?.photo_url || null;
 
   return (
     <section className="stack">
       <PageHeader title="Кабинет" subtitle="Управляйте VPN-подписками в одном месте" />
 
       <article className="hero-card">
+        <div className="profile-row">
+          {avatar ? (
+            <img className="profile-avatar" src={avatar} alt="Аватар" />
+          ) : (
+            <div className="profile-avatar profile-avatar-fallback">{displayName.slice(0, 1).toUpperCase()}</div>
+          )}
+          <div>
+            <p className="profile-name">{displayName}</p>
+            <p className="profile-username">{username ? `@${username}` : 'Telegram клиент'}</p>
+          </div>
+        </div>
         <p className="hero-label">Добро пожаловать</p>
         <p className="hero-title">Ваш VPN-центр управления</p>
         <p className="hero-subtitle">Ключи, платежи и рефералы в одном интерфейсе.</p>

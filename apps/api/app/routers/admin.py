@@ -18,10 +18,13 @@ from app.schemas.admin import (
     AdminPaymentDecisionRequest,
     AdminPaymentsListResponse,
     AdminPlanCreateRequest,
+    AdminReferralSettingsOut,
+    AdminReferralSettingsUpdateRequest,
     AdminPlanUpdateRequest,
     AdminPlansListResponse,
     AdminReferralStatOut,
     AdminRevokeKeyRequest,
+    AdminStatsOut,
     AdminSubscriptionOut,
     AdminUserOut,
 )
@@ -130,6 +133,37 @@ async def admin_list_plans(
     service = AdminService(session, threexui_service)
     items = await service.list_plans()
     return AdminPlansListResponse(items=items)
+
+
+@router.get('/stats', response_model=AdminStatsOut)
+async def admin_stats(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    stats = await service.get_stats()
+    return AdminStatsOut(**stats)
+
+
+@router.get('/settings/referral', response_model=AdminReferralSettingsOut)
+async def admin_get_referral_settings(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    days = await service.get_referral_bonus_days()
+    return AdminReferralSettingsOut(referral_bonus_days=days)
+
+
+@router.patch('/settings/referral', response_model=AdminReferralSettingsOut)
+async def admin_patch_referral_settings(
+    payload: AdminReferralSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    days = await service.set_referral_bonus_days(payload.referral_bonus_days)
+    return AdminReferralSettingsOut(referral_bonus_days=days)
 
 
 @router.post('/plans')

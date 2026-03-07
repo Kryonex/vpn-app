@@ -87,3 +87,20 @@ class AdminPaymentDecisionRequest(BaseModel):
 class AdminPlansListResponse(BaseModel):
     items: list[PlanOut]
 
+
+class AdminStatsOut(BaseModel):
+    total_payments: int
+    succeeded_payments: int
+    pending_payments: int
+    failed_payments: int
+    total_revenue: Decimal
+    month_revenue: Decimal
+
+
+class AdminReferralSettingsOut(BaseModel):
+    referral_bonus_days: int
+
+
+class AdminReferralSettingsUpdateRequest(BaseModel):
+    referral_bonus_days: int = Field(ge=0, le=3650)
+

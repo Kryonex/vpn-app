@@ -155,6 +155,42 @@ h1 {
   color: #bfd1ff;
 }
 
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(200, 218, 255, 0.5);
+  box-shadow: 0 8px 20px rgba(8, 12, 24, 0.4);
+}
+
+.profile-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background: linear-gradient(140deg, #8dc9ff, #57a7ff);
+  color: #061025;
+}
+
+.profile-name {
+  margin: 0;
+  font-weight: 700;
+}
+
+.profile-username {
+  margin: 2px 0 0;
+  color: #bed0f6;
+  font-size: 0.82rem;
+}
+
 .hero-title {
   margin: 8px 0 0;
   font-weight: 700;

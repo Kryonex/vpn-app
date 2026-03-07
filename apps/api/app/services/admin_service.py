@@ -5,12 +5,12 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.integrations.threexui.service import ThreeXUIService
-from app.models.enums import SubscriptionStatus, VPNKeyStatus
+from app.models.enums import PaymentStatus, SubscriptionStatus, VPNKeyStatus
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.subscription import Subscription
@@ -22,6 +22,7 @@ from app.repositories.plan_repository import PlanRepository
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
+from app.repositories.app_settings_repository import AppSettingsRepository
 from app.services.referral_service import ReferralService
 
 
@@ -35,6 +36,7 @@ class AdminService:
         self.referral_repo = ReferralRepository(session)
         self.referral_service = ReferralService(session)
         self.threexui_service = threexui_service
+        self.app_settings_repo = AppSettingsRepository(session)
 
     async def list_users(self, limit: int = 100, offset: int = 0):
         return await self.user_repo.list_users(limit=limit, offset=offset)
@@ -57,6 +59,62 @@ class AdminService:
 
     async def list_plans(self) -> list[Plan]:
         return await self.plan_repo.list_all()
+
+    async def get_stats(self) -> dict[str, Decimal | int]:
+        total_payments = int((await self.session.scalar(select(func.count(Payment.id)))) or 0)
+        succeeded_payments = int(
+            (await self.session.scalar(select(func.count(Payment.id)).where(Payment.status == PaymentStatus.SUCCEEDED))) or 0
+        )
+        pending_payments = int(
+            (
+                await self.session.scalar(
+                    select(func.count(Payment.id)).where(
+                        Payment.status.in_([PaymentStatus.PENDING, PaymentStatus.WAITING_FOR_CAPTURE])
+                    )
+                )
+            )
+            or 0
+        )
+        failed_payments = int(
+            (
+                await self.session.scalar(
+                    select(func.count(Payment.id)).where(Payment.status.in_([PaymentStatus.FAILED, PaymentStatus.CANCELED]))
+                )
+            )
+            or 0
+        )
+
+        total_revenue = (
+            await self.session.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.status == PaymentStatus.SUCCEEDED))
+        ) or Decimal('0')
+
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_revenue = (
+            await self.session.scalar(
+                select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                    Payment.status == PaymentStatus.SUCCEEDED,
+                    Payment.created_at >= month_start,
+                )
+            )
+        ) or Decimal('0')
+
+        return {
+            'total_payments': total_payments,
+            'succeeded_payments': succeeded_payments,
+            'pending_payments': pending_payments,
+            'failed_payments': failed_payments,
+            'total_revenue': Decimal(total_revenue),
+            'month_revenue': Decimal(month_revenue),
+        }
+
+    async def get_referral_bonus_days(self) -> int:
+        return await self.referral_service.get_referral_bonus_days()
+
+    async def set_referral_bonus_days(self, value: int) -> int:
+        await self.app_settings_repo.set('referral_bonus_days', str(value))
+        await self.session.commit()
+        return value
 
     async def create_plan(
         self,
