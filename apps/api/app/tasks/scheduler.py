@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import get_settings
 from app.core.redis import get_redis
 from app.db.session import SessionLocal
+from app.integrations.threexui.service import ThreeXUIService
 from app.models.enums import SubscriptionStatus, VPNKeyStatus
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -30,6 +31,7 @@ async def run_scheduler(stop_event: asyncio.Event) -> None:
             got_lock = await redis.set(lock_key, '1', nx=True, ex=max(settings.scheduler_interval_seconds - 1, 5))
             if got_lock:
                 await _process_subscriptions(notifier)
+                await _sync_panel_clients()
         except Exception as exc:  # noqa: BLE001
             logger.exception('Scheduler loop error: %s', exc)
 
@@ -92,3 +94,29 @@ async def _process_subscriptions(notifier: NotificationService) -> None:
                 sub.notified_expired_at = now
 
         await session.commit()
+
+
+async def _sync_panel_clients() -> None:
+    async with SessionLocal() as session:
+        threexui = ThreeXUIService()
+        try:
+            stmt = (
+                select(VPNKey)
+                .where(VPNKey.status.in_([VPNKeyStatus.ACTIVE, VPNKeyStatus.PENDING_PAYMENT]))
+                .options(
+                    selectinload(VPNKey.current_subscription),
+                    selectinload(VPNKey.versions),
+                )
+            )
+            keys = (await session.scalars(stmt)).all()
+
+            changed_count = 0
+            for key in keys:
+                if await threexui.sync_key_with_panel_state(key):
+                    changed_count += 1
+
+            if changed_count:
+                await session.commit()
+                logger.info('Scheduler panel sync: updated keys=%s', changed_count)
+        finally:
+            await threexui.client.close()

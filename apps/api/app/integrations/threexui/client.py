@@ -1,17 +1,23 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from app.core.config import get_settings
-from app.integrations.threexui.models import ThreeXUICreatedClient, ThreeXUIInbound, ThreeXUIResponse
+from app.integrations.threexui.models import (
+    ThreeXUICreatedClient,
+    ThreeXUIInbound,
+    ThreeXUIPanelClientSnapshot,
+    ThreeXUIResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +34,33 @@ class ThreeXUIClient:
         self._auth_ok = False
 
     @staticmethod
+    def _parse_json_field(value: Any) -> dict[str, Any] | list[Any] | None:
+        if isinstance(value, (dict, list)):
+            return value
+        if isinstance(value, str) and value.strip():
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, (dict, list)):
+                    return parsed
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    @staticmethod
     def _extract_connection_uri(obj: Any) -> str | None:
+        known_keys = {
+            'link',
+            'url',
+            'uri',
+            'subscription',
+            'subscriptionurl',
+            'subscription_url',
+            'suburl',
+            'sub_url',
+            'subscribe',
+            'sub',
+        }
+
         if isinstance(obj, str):
             value = obj.strip()
             if value.startswith(('vless://', 'vmess://', 'trojan://', 'ss://', 'hysteria2://', 'tuic://')):
@@ -36,27 +68,106 @@ class ThreeXUIClient:
             if value.startswith(('http://', 'https://')) and '/sub/' in value:
                 return value
             return None
+
         if isinstance(obj, dict):
-            for value in obj.values():
+            for key, value in obj.items():
+                if key.lower() in known_keys and isinstance(value, str):
+                    extracted = ThreeXUIClient._extract_connection_uri(value)
+                    if extracted:
+                        return extracted
                 extracted = ThreeXUIClient._extract_connection_uri(value)
                 if extracted:
                     return extracted
+
         if isinstance(obj, list):
             for value in obj:
                 extracted = ThreeXUIClient._extract_connection_uri(value)
                 if extracted:
                     return extracted
+
         return None
 
-    def _build_subscription_url(self, sub_id: str, client_uuid: str) -> str | None:
+    def _build_subscription_url(self, sub_id: str | None, client_uuid: str) -> str | None:
         base = (self.settings.threexui_public_base_url or self.base_url).strip()
         if not base:
             return None
+
         parsed = urlparse(base)
         if not parsed.scheme or not parsed.netloc:
             return None
-        # Different 3x-ui builds may use either subId or client UUID in subscription endpoint.
-        return f'{parsed.scheme}://{parsed.netloc}/sub/{sub_id or client_uuid}'
+
+        token = sub_id or client_uuid
+        return f'{parsed.scheme}://{parsed.netloc}/sub/{token}'
+
+    def _build_vless_uri_from_panel(self, inbound_obj: dict[str, Any], client_obj: dict[str, Any]) -> str | None:
+        protocol = str(inbound_obj.get('protocol') or '').lower()
+        if protocol != 'vless':
+            return None
+
+        client_uuid = str(client_obj.get('id') or '').strip()
+        if not client_uuid:
+            return None
+
+        base = (self.settings.threexui_public_base_url or self.base_url).strip()
+        parsed = urlparse(base)
+        host = parsed.hostname or '127.0.0.1'
+
+        port = inbound_obj.get('port')
+        if not isinstance(port, int):
+            return None
+
+        stream = self._parse_json_field(inbound_obj.get('streamSettings'))
+        stream_dict = stream if isinstance(stream, dict) else {}
+
+        network = str(stream_dict.get('network') or 'tcp')
+        security = str(stream_dict.get('security') or 'none')
+
+        params: dict[str, str] = {
+            'type': network,
+            'security': security,
+            'encryption': 'none',
+        }
+
+        if security == 'tls':
+            tls_settings = self._parse_json_field(stream_dict.get('tlsSettings'))
+            if isinstance(tls_settings, dict):
+                server_name = tls_settings.get('serverName')
+                if isinstance(server_name, str) and server_name:
+                    params['sni'] = server_name
+        elif security == 'reality':
+            reality = self._parse_json_field(stream_dict.get('realitySettings'))
+            if isinstance(reality, dict):
+                server_names = reality.get('serverNames')
+                if isinstance(server_names, list) and server_names:
+                    params['sni'] = str(server_names[0])
+                public_key = reality.get('publicKey')
+                if isinstance(public_key, str) and public_key:
+                    params['pbk'] = public_key
+                short_ids = reality.get('shortIds')
+                if isinstance(short_ids, list) and short_ids:
+                    params['sid'] = str(short_ids[0])
+
+        if network == 'ws':
+            ws_settings = self._parse_json_field(stream_dict.get('wsSettings'))
+            if isinstance(ws_settings, dict):
+                path = ws_settings.get('path')
+                if isinstance(path, str) and path:
+                    params['path'] = path
+                headers = ws_settings.get('headers')
+                if isinstance(headers, dict):
+                    host_header = headers.get('Host')
+                    if isinstance(host_header, str) and host_header:
+                        params['host'] = host_header
+        elif network == 'grpc':
+            grpc_settings = self._parse_json_field(stream_dict.get('grpcSettings'))
+            if isinstance(grpc_settings, dict):
+                service_name = grpc_settings.get('serviceName')
+                if isinstance(service_name, str) and service_name:
+                    params['serviceName'] = service_name
+
+        remark = str(client_obj.get('email') or inbound_obj.get('remark') or 'VPN')
+        query = urlencode(params)
+        return f'vless://{client_uuid}@{host}:{port}?{query}#{quote(remark)}'
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -105,12 +216,124 @@ class ThreeXUIClient:
             return parsed.obj
         return data
 
-    async def get_inbounds(self) -> list[ThreeXUIInbound]:
+    async def get_inbounds_raw(self) -> list[dict[str, Any]]:
         data = await self._request_with_fallback('GET', ['/panel/api/inbounds/list', '/xui/API/inbounds/list'])
         obj = self._unwrap_obj(data)
-        if isinstance(obj, list):
-            return [ThreeXUIInbound.model_validate(item) for item in obj if isinstance(item, dict)]
-        return []
+        if not isinstance(obj, list):
+            return []
+        return [item for item in obj if isinstance(item, dict)]
+
+    async def get_inbounds(self) -> list[ThreeXUIInbound]:
+        rows = await self.get_inbounds_raw()
+        return [ThreeXUIInbound.model_validate(item) for item in rows]
+
+    async def get_inbound_data(self, inbound_id: int) -> dict[str, Any] | None:
+        try:
+            data = await self._request_with_fallback(
+                'GET',
+                [f'/panel/api/inbounds/get/{inbound_id}', f'/xui/API/inbounds/get/{inbound_id}'],
+            )
+            obj = self._unwrap_obj(data)
+            if isinstance(obj, dict):
+                return obj
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('3x-ui get inbound by id failed for %s: %s', inbound_id, type(exc).__name__)
+
+        inbounds = await self.get_inbounds_raw()
+        for item in inbounds:
+            try:
+                if int(item.get('id', -1)) == inbound_id:
+                    return item
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @staticmethod
+    def _extract_clients_from_inbound(inbound_obj: dict[str, Any]) -> list[dict[str, Any]]:
+        clients: list[dict[str, Any]] = []
+
+        settings = ThreeXUIClient._parse_json_field(inbound_obj.get('settings'))
+        if isinstance(settings, dict):
+            raw_clients = settings.get('clients')
+            if isinstance(raw_clients, list):
+                clients.extend(item for item in raw_clients if isinstance(item, dict))
+
+        for key in ('clients', 'clientStats', 'client_stats'):
+            data = inbound_obj.get(key)
+            if isinstance(data, list):
+                clients.extend(item for item in data if isinstance(item, dict))
+
+        unique: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in clients:
+            marker = f"{item.get('id', '')}|{item.get('email', '')}"
+            if marker in seen:
+                continue
+            seen.add(marker)
+            unique.append(item)
+
+        return unique
+
+    async def get_client_snapshot(
+        self,
+        *,
+        inbound_id: int | None,
+        client_uuid: str,
+        email_remark: str | None,
+        fallback_sub_id: str | None = None,
+    ) -> ThreeXUIPanelClientSnapshot | None:
+        candidate_inbounds: list[dict[str, Any]] = []
+
+        if inbound_id is not None:
+            inbound = await self.get_inbound_data(inbound_id)
+            if inbound:
+                candidate_inbounds.append(inbound)
+
+        if not candidate_inbounds:
+            candidate_inbounds = await self.get_inbounds_raw()
+
+        for inbound in candidate_inbounds:
+            clients = self._extract_clients_from_inbound(inbound)
+            for client in clients:
+                row_uuid = str(client.get('id') or '').strip()
+                row_email = str(client.get('email') or '').strip()
+                if row_uuid != client_uuid and (not email_remark or row_email != email_remark):
+                    continue
+
+                sub_id = str(client.get('subId') or client.get('sub_id') or fallback_sub_id or '').strip() or None
+                connection_uri = (
+                    self._extract_connection_uri(client)
+                    or self._extract_connection_uri(inbound)
+                    or self._build_subscription_url(sub_id=sub_id, client_uuid=client_uuid)
+                    or self._build_vless_uri_from_panel(inbound, client)
+                )
+
+                inbound_value = inbound.get('id')
+                inbound_value_int = int(inbound_value) if isinstance(inbound_value, int) else inbound_id
+
+                return ThreeXUIPanelClientSnapshot(
+                    client_uuid=client_uuid,
+                    inbound_id=inbound_value_int,
+                    email_remark=row_email or email_remark,
+                    sub_id=sub_id,
+                    connection_uri=connection_uri,
+                    raw={'inbound': inbound, 'client': client},
+                )
+
+        info = await self.get_client_info(client_uuid)
+        if info:
+            connection_uri = self._extract_connection_uri(info)
+            if connection_uri:
+                return ThreeXUIPanelClientSnapshot(
+                    client_uuid=client_uuid,
+                    inbound_id=inbound_id,
+                    email_remark=email_remark,
+                    sub_id=fallback_sub_id,
+                    connection_uri=connection_uri,
+                    raw={'traffic': info},
+                )
+
+        return None
 
     async def add_client(
         self,
@@ -142,65 +365,96 @@ class ThreeXUIClient:
         )
 
         if not data.get('success', True):
-            # Some 3x-ui builds use another shape. Try fallback payload.
             data = await self._request_with_fallback(
                 'POST',
                 ['/panel/api/inbounds/addClient', '/xui/API/inbounds/addClient'],
                 json=payload_fallback,
             )
 
-        connection_uri = self._extract_connection_uri(data)
-        if not connection_uri:
-            info = await self.get_client_info(client_uuid)
-            connection_uri = self._extract_connection_uri(info or {})
+        snapshot: ThreeXUIPanelClientSnapshot | None = None
+        for _ in range(3):
+            snapshot = await self.get_client_snapshot(
+                inbound_id=inbound_id,
+                client_uuid=client_uuid,
+                email_remark=email_remark,
+                fallback_sub_id=sub_id,
+            )
+            if snapshot and snapshot.connection_uri:
+                break
+            await asyncio.sleep(0.35)
 
-        if not connection_uri:
-            connection_uri = self._build_subscription_url(sub_id=sub_id, client_uuid=client_uuid)
-        if not connection_uri:
-            # final best-effort fallback for installations that expect UUID in sub endpoint
-            base = (self.settings.threexui_public_base_url or self.base_url).strip().rstrip('/')
-            if base:
-                connection_uri = f'{base}/sub/{client_uuid}'
+        connection_uri = snapshot.connection_uri if snapshot else self._build_subscription_url(sub_id, client_uuid)
 
         return ThreeXUICreatedClient(
             client_uuid=client_uuid,
             inbound_id=inbound_id,
             email_remark=email_remark,
             connection_uri=connection_uri,
-            raw=data,
+            raw={'create_response': data, 'panel_snapshot': snapshot.raw if snapshot else None},
         )
 
-    async def update_client_expiry(self, inbound_id: int, client_uuid: str, email_remark: str, expires_at: datetime) -> None:
+    async def update_client_expiry(
+        self,
+        inbound_id: int,
+        client_uuid: str,
+        email_remark: str,
+        expires_at: datetime,
+        *,
+        enable: bool = True,
+        sub_id: str | None = None,
+    ) -> None:
         expiry_ms = int(expires_at.astimezone(timezone.utc).timestamp() * 1000)
         client_payload = {
             'id': client_uuid,
             'email': email_remark,
-            'enable': True,
+            'enable': enable,
             'expiryTime': expiry_ms,
             'limitIp': 0,
             'totalGB': 0,
             'tgId': '',
-            'subId': '',
+            'subId': sub_id or '',
         }
 
         payload = {'id': inbound_id, 'settings': json.dumps({'clients': [client_payload]})}
         await self._request_with_fallback(
             'POST',
-            [f'/panel/api/inbounds/updateClient/{client_uuid}', '/panel/api/inbounds/updateClient'],
+            [
+                f'/panel/api/inbounds/updateClient/{client_uuid}',
+                '/panel/api/inbounds/updateClient',
+                f'/xui/API/inbounds/updateClient/{client_uuid}',
+            ],
             json=payload,
         )
 
-    async def delete_client(self, client_uuid: str) -> None:
-        await self._request_with_fallback(
-            'POST',
-            [f'/panel/api/inbounds/delClient/{client_uuid}', f'/xui/API/inbounds/delClient/{client_uuid}'],
+    async def delete_client(self, client_uuid: str, *, inbound_id: int | None = None, email_remark: str | None = None) -> None:
+        try:
+            await self._request_with_fallback(
+                'POST',
+                [f'/panel/api/inbounds/delClient/{client_uuid}', f'/xui/API/inbounds/delClient/{client_uuid}'],
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('3x-ui delete client failed for %s: %s', client_uuid, type(exc).__name__)
+            if inbound_id is None:
+                raise
+
+        await self.update_client_expiry(
+            inbound_id=inbound_id,
+            client_uuid=client_uuid,
+            email_remark=email_remark or client_uuid,
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+            enable=False,
+            sub_id=None,
         )
 
     async def get_client_info(self, client_uuid: str) -> dict[str, Any] | None:
         try:
             data = await self._request_with_fallback(
                 'GET',
-                [f'/panel/api/inbounds/getClientTraffics/{client_uuid}', f'/xui/API/inbounds/getClientTraffics/{client_uuid}'],
+                [
+                    f'/panel/api/inbounds/getClientTraffics/{client_uuid}',
+                    f'/xui/API/inbounds/getClientTraffics/{client_uuid}',
+                ],
             )
             return data
         except Exception as exc:  # noqa: BLE001
@@ -224,4 +478,3 @@ class ThreeXUIClient:
             expires_at=expires_at,
             sub_id=sub_id,
         )
-

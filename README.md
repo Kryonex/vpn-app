@@ -90,6 +90,12 @@ docker compose run --rm api python -m app.scripts.seed
 - `GET /health/live`
 - `GET /health/ready`
 
+## Support endpoint
+- `GET /support` (requires user auth)
+- Resolves support contact by `TELEGRAM_ADMIN_ID`:
+  - if admin Telegram username is known in `telegram_accounts`, returns `@username` + `https://t.me/username`
+  - otherwise returns fallback `tg_<id>` + `tg://user?id=<id>`
+
 ## Ubuntu VPS deployment
 
 ### 1) Install Docker
@@ -179,4 +185,10 @@ docker compose up -d --build
 - Payment flow: user creates payment request, transfers money to `PAYMENT_PHONE`, admin confirms payment in `/admin/payments/{payment_id}/approve`.
 - Admin can manage tariffs via `/admin/plans` (`GET`, `POST`, `PATCH /admin/plans/{plan_id}`).
 - В Mini App есть раздел «Админ» (виден при совпадении `VITE_TELEGRAM_ADMIN_ID` и Telegram user id).
+- 3x-ui sync:
+  - key listing/details perform on-demand sync with panel
+  - scheduler performs periodic sync and marks missing panel clients as revoked locally
+- Connection URL source:
+  - backend first tries to use URL/subscription fields from 3x-ui panel API data
+  - if not present, uses panel client/inbound data (`subId`, protocol/stream settings) to build final URI/link
 - Secrets are loaded from environment variables only.

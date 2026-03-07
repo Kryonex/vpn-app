@@ -84,3 +84,10 @@ export type PaymentIntent = {
   transfer_phone: string | null;
   transfer_note: string | null;
 };
+
+export type SupportContact = {
+  telegram_admin_id: number | null;
+  username: string | null;
+  display_tag: string;
+  telegram_link: string | null;
+};

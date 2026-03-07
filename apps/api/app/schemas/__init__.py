@@ -20,6 +20,7 @@ from app.schemas.key import PurchaseRequest, RenewRequest, RotateResponse, Subsc
 from app.schemas.payment import PaymentIntentOut, PaymentOut
 from app.schemas.plan import PlanOut
 from app.schemas.referral import ReferralMeOut
+from app.schemas.support import SupportContactOut
 from app.schemas.user import MeResponse, TelegramAccountOut
 
 __all__ = [
@@ -51,4 +52,5 @@ __all__ = [
     'AdminStatsOut',
     'AdminSubscriptionOut',
     'AdminUserOut',
+    'SupportContactOut',
 ]

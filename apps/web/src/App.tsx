@@ -4,7 +4,6 @@ import { BottomNav } from './components/BottomNav';
 import { ErrorState, LoadingState } from './components/StateCards';
 import { useAuth } from './context/AuthContext';
 import { BuyPlanPage } from './pages/BuyPlanPage';
-import { HelpPage } from './pages/HelpPage';
 import { HomePage } from './pages/HomePage';
 import { AdminPage } from './pages/AdminPage';
 import { KeyDetailsPage } from './pages/KeyDetailsPage';
@@ -12,6 +11,7 @@ import { KeysPage } from './pages/KeysPage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { ReferralsPage } from './pages/ReferralsPage';
 import { RenewKeyPage } from './pages/RenewKeyPage';
+import { SupportPage } from './pages/SupportPage';
 
 export default function App() {
   const { isLoading, isAuthenticated, isAdmin, error } = useAuth();
@@ -45,7 +45,8 @@ export default function App() {
         <Route path="/buy" element={<BuyPlanPage />} />
         <Route path="/payments" element={<PaymentsPage />} />
         <Route path="/referrals" element={<ReferralsPage />} />
-        <Route path="/help" element={<HelpPage />} />
+        <Route path="/support" element={<SupportPage />} />
+        <Route path="/help" element={<SupportPage />} />
         <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -103,7 +103,14 @@ export function KeyDetailsPage() {
           </div>
         </article>
       ) : (
-        <EmptyState title="Нет активного URI" text="Продлите или перевыпустите ключ, чтобы получить новый конфиг." />
+        <EmptyState
+          title="Нет активного URI"
+          text={
+            keyData.status === 'revoked'
+              ? 'Клиент удален в панели или отозван. Выполните перевыпуск ключа.'
+              : 'Продлите или перевыпустите ключ, чтобы получить новый конфиг.'
+          }
+        />
       )}
 
       {error && <ErrorState text={error} />}

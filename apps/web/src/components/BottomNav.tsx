@@ -10,7 +10,7 @@ const navItems: Array<{ to: string; label: string; icon: ComponentType<{ size?: 
   { to: '/buy', label: 'Купить', icon: CircleDollarSign },
   { to: '/payments', label: 'Платежи', icon: ReceiptText },
   { to: '/referrals', label: 'Рефералы', icon: Users },
-  { to: '/help', label: 'Помощь', icon: HelpCircle },
+  { to: '/support', label: 'Поддержка', icon: HelpCircle },
   { to: '/admin', label: 'Админ', icon: Shield, adminOnly: true },
 ];
 

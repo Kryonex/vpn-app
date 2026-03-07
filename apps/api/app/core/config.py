@@ -2,6 +2,7 @@ from functools import lru_cache
 from typing import List
 
 from pydantic import Field
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +48,13 @@ class Settings(BaseSettings):
     threexui_verify_ssl: bool = Field(default=False, alias='THREEXUI_VERIFY_SSL')
     threexui_timeout_seconds: int = Field(default=15, alias='THREEXUI_TIMEOUT_SECONDS')
     threexui_retry_attempts: int = Field(default=3, alias='THREEXUI_RETRY_ATTEMPTS')
+
+    @field_validator('telegram_admin_id', 'threexui_default_inbound_id', mode='before')
+    @classmethod
+    def _parse_optional_int(cls, value):  # noqa: ANN001
+        if value in (None, ''):
+            return None
+        return int(value)
 
     @property
     def cors_origins(self) -> List[str]:

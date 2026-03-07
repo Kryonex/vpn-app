@@ -20,8 +20,16 @@ class KeyService:
 
     async def list_user_keys(self, user_id: UUID):
         keys = await self.repo.list_by_owner(user_id)
+        changed = False
         for key in keys:
-            active = next((item for item in key.versions if item.is_active), None)
+            if await self.threexui_service.sync_key_with_panel_state(key):
+                changed = True
+        if changed:
+            await self.session.commit()
+
+        for key in keys:
+            active_versions = [item for item in key.versions if item.is_active]
+            active = max(active_versions, key=lambda item: item.version, default=None)
             setattr(key, 'active_version', active)
         return keys
 
@@ -29,7 +37,12 @@ class KeyService:
         key = await self.repo.get_owned_key(key_id, user_id)
         if not key:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Key not found')
-        active = next((item for item in key.versions if item.is_active), None)
+
+        if await self.threexui_service.sync_key_with_panel_state(key):
+            await self.session.commit()
+
+        active_versions = [item for item in key.versions if item.is_active]
+        active = max(active_versions, key=lambda item: item.version, default=None)
         setattr(key, 'active_version', active)
         return key
 
@@ -47,13 +60,19 @@ class KeyService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Active key version not found')
 
         next_version = await self.repo.get_next_version(key.id)
-        created = await self.threexui_service.rotate_vpn_client(
-            user=key.owner,
-            key=key,
-            subscription=subscription,
-            current_version=old_version,
-            new_version_number=next_version,
-        )
+        try:
+            created = await self.threexui_service.rotate_vpn_client(
+                user=key.owner,
+                key=key,
+                subscription=subscription,
+                current_version=old_version,
+                new_version_number=next_version,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail='Failed to rotate key in 3x-ui panel',
+            ) from exc
 
         old_version.is_active = False
         old_version.revoked_at = datetime.now(timezone.utc)

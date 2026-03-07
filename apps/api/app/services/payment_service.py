@@ -266,7 +266,9 @@ class PaymentService:
 
         active_version = await self.key_repo.get_active_version(key.id)
         if active_version:
-            await self.threexui_service.extend_vpn_client(active_version, new_expires)
+            refreshed_uri = await self.threexui_service.extend_vpn_client(active_version, new_expires)
+            if refreshed_uri:
+                active_version.connection_uri = refreshed_uri
         else:
             next_version = await self.key_repo.get_next_version(key.id)
             created = await self.threexui_service.create_vpn_client(

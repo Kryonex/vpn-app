@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.core.redis import close_redis
-from app.routers import admin, auth, health, keys, me, payments, plans, referrals
+from app.routers import admin, auth, health, keys, me, payments, plans, referrals, support
 from app.tasks.scheduler import run_scheduler
 
 settings = get_settings()
@@ -31,6 +31,7 @@ app.include_router(plans.router)
 app.include_router(keys.router)
 app.include_router(payments.router)
 app.include_router(referrals.router)
+app.include_router(support.router)
 app.include_router(admin.router)
 app.include_router(health.router)
 

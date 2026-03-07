@@ -41,6 +41,9 @@ export function KeysPage() {
               ? new Date(key.current_subscription.expires_at).toLocaleDateString()
               : 'нет данных'}
           </p>
+          {key.status === 'revoked' && !key.active_version && (
+            <p className="muted">Клиент удален/отозван в панели 3x-ui. Для доступа перевыпустите ключ.</p>
+          )}
           <div className="action-row">
             <Link className="btn btn-primary" to={`/keys/${key.id}`}>
               <KeyRound size={16} /> Подробнее

@@ -42,3 +42,12 @@ class ThreeXUIClientInfo(BaseModel):
     is_active: bool | None = None
     raw: dict[str, Any] | None = None
 
+
+class ThreeXUIPanelClientSnapshot(BaseModel):
+    client_uuid: str
+    inbound_id: int | None = None
+    email_remark: str | None = None
+    sub_id: str | None = None
+    connection_uri: str | None = None
+    raw: dict[str, Any] | None = None
+
