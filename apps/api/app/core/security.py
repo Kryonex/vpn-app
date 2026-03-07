@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from urllib.parse import parse_qsl
+from urllib.parse import unquote
 
 import jwt
 from fastapi import HTTPException, status
@@ -19,7 +19,22 @@ class TelegramAuthError(ValueError):
 
 
 def _parse_init_data(init_data: str) -> list[tuple[str, str]]:
-    return parse_qsl(init_data, keep_blank_values=True, strict_parsing=False)
+    # Important: parse manually and decode with unquote (not unquote_plus),
+    # so '+' stays '+' and signed content remains intact.
+    raw = init_data[1:] if init_data.startswith('?') else init_data
+    if not raw:
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    for chunk in raw.split('&'):
+        if not chunk:
+            continue
+        if '=' in chunk:
+            key_raw, value_raw = chunk.split('=', 1)
+        else:
+            key_raw, value_raw = chunk, ''
+        pairs.append((unquote(key_raw), unquote(value_raw)))
+    return pairs
 
 
 def _build_data_check_string(parsed_pairs: list[tuple[str, str]]) -> tuple[str, str, list[str]]:
