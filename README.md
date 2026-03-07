@@ -62,6 +62,7 @@ Required variables:
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `DATABASE_URL` (must match postgres credentials)
 - `THREEXUI_BASE_URL`, `THREEXUI_USERNAME`, `THREEXUI_PASSWORD`
+- `THREEXUI_PUBLIC_BASE_URL` (optional, recommended when panel is on internal URL; used for client sub-link)
 
 ## Run with Docker Compose
 ```bash

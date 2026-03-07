@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     scheduler_interval_seconds: int = Field(default=120, alias='SCHEDULER_INTERVAL_SECONDS')
 
     threexui_base_url: str = Field(default='', alias='THREEXUI_BASE_URL')
+    threexui_public_base_url: str = Field(default='', alias='THREEXUI_PUBLIC_BASE_URL')
     threexui_username: str = Field(default='', alias='THREEXUI_USERNAME')
     threexui_password: str = Field(default='', alias='THREEXUI_PASSWORD')
     threexui_default_inbound_id: int | None = Field(default=None, alias='THREEXUI_DEFAULT_INBOUND_ID')

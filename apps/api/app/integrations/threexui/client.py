@@ -5,6 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -25,6 +26,34 @@ class ThreeXUIClient:
             verify=self.settings.threexui_verify_ssl,
         )
         self._auth_ok = False
+
+    @staticmethod
+    def _extract_connection_uri(obj: Any) -> str | None:
+        if isinstance(obj, str):
+            value = obj.strip()
+            if value.startswith(('vless://', 'vmess://', 'trojan://', 'ss://', 'hysteria2://', 'tuic://')):
+                return value
+            return None
+        if isinstance(obj, dict):
+            for value in obj.values():
+                extracted = ThreeXUIClient._extract_connection_uri(value)
+                if extracted:
+                    return extracted
+        if isinstance(obj, list):
+            for value in obj:
+                extracted = ThreeXUIClient._extract_connection_uri(value)
+                if extracted:
+                    return extracted
+        return None
+
+    def _build_subscription_url(self, sub_id: str) -> str | None:
+        base = (self.settings.threexui_public_base_url or self.base_url).strip()
+        if not base:
+            return None
+        parsed = urlparse(base)
+        if not parsed.scheme or not parsed.netloc:
+            return None
+        return f'{parsed.scheme}://{parsed.netloc}/sub/{sub_id}'
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -86,6 +115,7 @@ class ThreeXUIClient:
         client_uuid: str,
         email_remark: str,
         expires_at: datetime,
+        sub_id: str,
     ) -> ThreeXUICreatedClient:
         expiry_ms = int(expires_at.astimezone(timezone.utc).timestamp() * 1000)
         client_payload = {
@@ -96,7 +126,7 @@ class ThreeXUIClient:
             'limitIp': 0,
             'totalGB': 0,
             'tgId': '',
-            'subId': '',
+            'subId': sub_id,
         }
 
         payload_primary = {'id': inbound_id, 'settings': json.dumps({'clients': [client_payload]})}
@@ -116,11 +146,13 @@ class ThreeXUIClient:
                 json=payload_fallback,
             )
 
+        connection_uri = self._extract_connection_uri(data) or self._build_subscription_url(sub_id)
+
         return ThreeXUICreatedClient(
             client_uuid=client_uuid,
             inbound_id=inbound_id,
             email_remark=email_remark,
-            connection_uri=None,
+            connection_uri=connection_uri,
             raw=data,
         )
 
@@ -170,10 +202,12 @@ class ThreeXUIClient:
             inbound_id = inbounds[0].id
 
         client_uuid = str(uuid.uuid4())
+        sub_id = uuid.uuid4().hex[:16]
         return await self.add_client(
             inbound_id=inbound_id,
             client_uuid=client_uuid,
             email_remark=email_remark,
             expires_at=expires_at,
+            sub_id=sub_id,
         )
 
