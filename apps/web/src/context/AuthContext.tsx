@@ -1,7 +1,7 @@
 ﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
-import { initTelegramSDK, type TGUser } from '../telegram';
+import { initTelegramSDK, type TGUser, waitForTelegramWebApp } from '../telegram';
 import type { MeResponse, SystemStatus } from '../types/models';
 
 type AuthState = {
@@ -39,15 +39,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const bootstrap = async () => {
       try {
         setIsLoading(true);
-        const webApp = initTelegramSDK();
+        initTelegramSDK();
+        const webApp = await waitForTelegramWebApp();
+        console.info('[auth] telegram bootstrap', {
+          hasTelegram: Boolean(window.Telegram),
+          hasWebApp: Boolean(window.Telegram?.WebApp),
+          hasInitData: Boolean(webApp?.initData),
+        });
         setTelegramProfile(webApp?.initDataUnsafe?.user ?? null);
 
         let token = localStorage.getItem('session_token');
         if (!token) {
           // Важно: отправляем raw Telegram.WebApp.initData как есть.
           // Не реконструируем строку из initDataUnsafe.
-          const rawInitData = webApp?.initData;
+          const rawInitData = window.Telegram?.WebApp?.initData || webApp?.initData || '';
           const initData = rawInitData || import.meta.env.VITE_DEV_INIT_DATA || '';
+          console.info('[auth] initData source', {
+            fromTelegram: Boolean(rawInitData),
+            fromDevFallback: Boolean(!rawInitData && import.meta.env.VITE_DEV_INIT_DATA),
+          });
 
           if (!initData) {
             throw new Error('Отсутствует Telegram initData. Откройте приложение через Telegram или задайте VITE_DEV_INIT_DATA.');

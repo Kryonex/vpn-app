@@ -31,6 +31,14 @@ declare global {
 
 let themeListenersBound = false;
 
+function debugTelegramState(stage: string, webApp: TGWebApp | null) {
+  console.info('[telegram]', stage, {
+    hasTelegram: Boolean(window.Telegram),
+    hasWebApp: Boolean(webApp),
+    hasInitData: Boolean(webApp?.initData),
+  });
+}
+
 export function initTelegramSDK(): TGWebApp | null {
   // The SDK package is intentionally kept to align with official Mini Apps tooling.
   // Runtime compatibility varies between SDK versions, so we call it defensively.
@@ -47,6 +55,7 @@ export function initTelegramSDK(): TGWebApp | null {
     });
 
   const webApp = window.Telegram?.WebApp ?? null;
+  debugTelegramState('init', webApp);
   if (webApp) {
     webApp.ready();
     webApp.expand();
@@ -81,5 +90,24 @@ export function initTelegramSDK(): TGWebApp | null {
     themeListenersBound = true;
   }
 
+  return webApp;
+}
+
+export async function waitForTelegramWebApp(timeoutMs = 2000, stepMs = 100): Promise<TGWebApp | null> {
+  const startedAt = Date.now();
+  let webApp = window.Telegram?.WebApp ?? null;
+  debugTelegramState('wait:start', webApp);
+
+  while (Date.now() - startedAt < timeoutMs) {
+    webApp = window.Telegram?.WebApp ?? null;
+    if (webApp?.initData) {
+      debugTelegramState('wait:resolved', webApp);
+      return webApp;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, stepMs));
+  }
+
+  webApp = window.Telegram?.WebApp ?? null;
+  debugTelegramState('wait:timeout', webApp);
   return webApp;
 }
