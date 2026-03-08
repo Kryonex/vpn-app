@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,4 +20,4 @@ async def get_system_status(
     session: AsyncSession = Depends(get_session),
 ) -> SystemStatusOut:
     state = await SystemStatusService(session).get_status()
-    return SystemStatusOut(**state.__dict__)
+    return SystemStatusOut(**asdict(state))

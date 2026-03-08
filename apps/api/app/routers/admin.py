@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -212,7 +214,7 @@ async def admin_get_system_status(
     session: AsyncSession = Depends(get_session),
 ):
     state = await SystemStatusService(session).get_status()
-    return SystemStatusOut(**state.__dict__)
+    return SystemStatusOut(**asdict(state))
 
 
 @router.patch('/system/status', response_model=SystemStatusOut)
@@ -239,7 +241,7 @@ async def admin_update_system_status(
             enqueue_fn=notifier.enqueue_telegram_notification,
         )
     await session.commit()
-    return SystemStatusOut(**state.__dict__)
+    return SystemStatusOut(**asdict(state))
 
 
 @router.post('/messages/send', response_model=AdminMessageSendResponse)
