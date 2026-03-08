@@ -2,37 +2,30 @@ function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function safeGetToken(): string | null {
+let accessTokenCache: string | null = null;
+
+function safeReadToken(): string | null {
   try {
     const token = localStorage.getItem('session_token');
-    const normalized = token?.trim() || null;
-    console.info('[auth] access token restored', {
-      restored: Boolean(normalized),
-    });
-    return normalized;
+    return token?.trim() || null;
   } catch {
-    console.info('[auth] access token restored', {
-      restored: false,
-    });
     return null;
   }
 }
 
-function safeSetToken(token: string): void {
+function safeWriteToken(token: string): void {
   try {
     localStorage.setItem('session_token', token.trim());
-  } finally {
-    console.info('[auth] access token stored', {
-      stored: Boolean(token.trim()),
-    });
+  } catch {
+    // localStorage can be flaky in embedded webviews, memory cache still keeps auth alive.
   }
 }
 
-function safeClearToken(): void {
+function safeRemoveToken(): void {
   try {
     localStorage.removeItem('session_token');
-  } finally {
-    console.info('[auth] access token cleared');
+  } catch {
+    // Ignore storage cleanup issues.
   }
 }
 
@@ -56,15 +49,35 @@ export function getApiBase() {
 }
 
 export function getAccessToken(): string | null {
-  return safeGetToken();
+  if (accessTokenCache) {
+    console.info('[auth] access token restored', { restored: true, source: 'memory' });
+    return accessTokenCache;
+  }
+
+  const restored = safeReadToken();
+  accessTokenCache = restored;
+  console.info('[auth] access token restored', {
+    restored: Boolean(restored),
+    source: restored ? 'localStorage' : 'none',
+  });
+  return restored;
 }
 
 export function setAccessToken(token: string): void {
-  safeSetToken(token);
+  const normalized = token.trim();
+  accessTokenCache = normalized || null;
+  if (normalized) {
+    safeWriteToken(normalized);
+  }
+  console.info('[auth] access token stored', {
+    stored: Boolean(normalized),
+  });
 }
 
 export function clearAccessToken(): void {
-  safeClearToken();
+  accessTokenCache = null;
+  safeRemoveToken();
+  console.info('[auth] access token cleared');
 }
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
