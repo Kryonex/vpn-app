@@ -1,6 +1,6 @@
 ﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-import { apiRequest, toJsonBody } from '../api/client';
+import { apiRequest, clearAccessToken, getAccessToken, setAccessToken, toJsonBody } from '../api/client';
 import { initTelegramSDK, type TGUser, waitForTelegramWebApp } from '../telegram';
 import type { MeResponse, SystemStatus } from '../types/models';
 
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         setTelegramProfile(webApp?.initDataUnsafe?.user ?? null);
 
-        let token = localStorage.getItem('session_token');
+        let token = getAccessToken();
         if (!token) {
           // Важно: отправляем raw Telegram.WebApp.initData как есть.
           // Не реконструируем строку из initDataUnsafe.
@@ -68,13 +68,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             toJsonBody({ init_data: initData }),
           );
           token = auth.access_token;
-          localStorage.setItem('session_token', token);
+          setAccessToken(token);
+        } else {
+          setAccessToken(token);
         }
 
         await Promise.all([refreshMe(), refreshSystemStatus()]);
         setError(null);
       } catch (err) {
-        localStorage.removeItem('session_token');
+        clearAccessToken();
         const message = err instanceof Error ? err.message : 'Ошибка авторизации';
         setError(message);
       } finally {

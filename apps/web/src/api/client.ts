@@ -1,5 +1,33 @@
-﻿function trimTrailingSlashes(value: string): string {
+function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
+}
+
+let accessTokenCache: string | null = null;
+
+function safeGetStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Ignore storage issues in restricted Telegram webviews.
+  }
+}
+
+function safeRemoveStorage(key: string): void {
+  try {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage issues in restricted Telegram webviews.
+  }
 }
 
 function resolveApiBase(): string {
@@ -21,8 +49,36 @@ export function getApiBase() {
   return API_BASE;
 }
 
+export function getAccessToken(): string | null {
+  if (accessTokenCache) {
+    return accessTokenCache;
+  }
+  const stored = safeGetStorage('session_token');
+  accessTokenCache = stored?.trim() || null;
+  return accessTokenCache;
+}
+
+export function setAccessToken(token: string): void {
+  accessTokenCache = token.trim();
+  safeSetStorage('session_token', accessTokenCache);
+}
+
+export function clearAccessToken(): void {
+  accessTokenCache = null;
+  safeRemoveStorage('session_token');
+}
+
+function getAdminToken(): string | null {
+  const envToken = (import.meta.env.VITE_ADMIN_BEARER_TOKEN as string | undefined)?.trim();
+  if (envToken) {
+    return envToken;
+  }
+  return getAccessToken();
+}
+
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('session_token');
+  const isAdminPath = path.startsWith('/admin');
+  const token = isAdminPath ? getAdminToken() : getAccessToken();
   const requestUrl = `${API_BASE}${path}`;
 
   const headers = new Headers(options?.headers);
@@ -30,6 +86,12 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
+
+  console.info('[api] request', {
+    path,
+    isAdminPath,
+    hasAuthToken: Boolean(token),
+  });
 
   let response: Response;
   try {
