@@ -21,6 +21,7 @@ from app.models.referral_reward import ReferralReward
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.telegram_account import TelegramAccount
+from app.models.audit_log import AuditLog
 from app.models.vpn_key import VPNKey
 from app.models.vpn_key_version import VPNKeyVersion
 from app.repositories.payment_repository import PaymentRepository
@@ -124,45 +125,139 @@ class AdminService:
         await self.session.commit()
         return value
 
-    async def reset_keys_and_earnings(self, confirm_text: str) -> dict[str, int]:
+    async def lookup_user_by_username(self, username: str) -> dict[str, object] | None:
+        normalized_username = username.lstrip('@').strip().lower()
+        if not normalized_username:
+            return None
+
+        user = await self.user_repo.get_by_telegram_username(normalized_username)
+        if not user:
+            return None
+
+        account = user.telegram_account
+        return {
+            'id': user.id,
+            'referral_code': user.referral_code,
+            'bonus_days_balance': user.bonus_days_balance,
+            'created_at': user.created_at,
+            'telegram_username': account.username if account else None,
+            'telegram_user_id': account.telegram_user_id if account else None,
+        }
+
+    async def sync_keys_with_panel(self) -> dict[str, int]:
+        stmt = (
+            select(VPNKey)
+            .options(selectinload(VPNKey.versions), selectinload(VPNKey.current_subscription))
+            .order_by(VPNKey.created_at.desc())
+        )
+        keys = (await self.session.scalars(stmt)).all()
+
+        processed = 0
+        changed = 0
+        for key in keys:
+            processed += 1
+            if await self.threexui_service.sync_key_with_panel_state(key):
+                changed += 1
+
+        if changed:
+            await self.session.commit()
+        return {'processed': processed, 'changed': changed}
+
+    async def reset_keys_and_earnings(self, confirm_text: str, mode: str = 'hard') -> dict[str, int]:
         if confirm_text.strip().upper() != 'RESET':
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid confirmation text')
 
-        now = datetime.now(timezone.utc)
-        keys_updated = (
-            await self.session.execute(
-                update(VPNKey).values(status=VPNKeyStatus.REVOKED, current_subscription_id=None)
+        mode_normalized = (mode or 'hard').strip().lower()
+        if mode_normalized not in {'soft', 'hard'}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Unsupported reset mode')
+
+        if mode_normalized == 'soft':
+            now = datetime.now(timezone.utc)
+            keys_updated = (
+                await self.session.execute(
+                    update(VPNKey).values(status=VPNKeyStatus.REVOKED, current_subscription_id=None)
+                )
+            ).rowcount or 0
+            subscriptions_updated = (
+                await self.session.execute(
+                    update(Subscription).values(status=SubscriptionStatus.REVOKED)
+                )
+            ).rowcount or 0
+            versions_updated = (
+                await self.session.execute(
+                    update(VPNKeyVersion).values(is_active=False, revoked_at=now, connection_uri=None)
+                )
+            ).rowcount or 0
+            payments_updated = (
+                await self.session.execute(
+                    update(Payment).values(status=PaymentStatus.CANCELED, amount=0, processed_at=now)
+                )
+            ).rowcount or 0
+            payment_events_deleted = (await self.session.execute(delete(PaymentEvent))).rowcount or 0
+            bonus_ledger_deleted = (await self.session.execute(delete(BonusDayLedger))).rowcount or 0
+            referral_rewards_deleted = (await self.session.execute(delete(ReferralReward))).rowcount or 0
+            users_updated = (await self.session.execute(update(User).values(bonus_days_balance=0))).rowcount or 0
+
+            await self.session.commit()
+            return {
+                'mode': 'soft',
+                'keys_revoked': int(keys_updated),
+                'subscriptions_revoked': int(subscriptions_updated),
+                'versions_deactivated': int(versions_updated),
+                'payments_zeroed': int(payments_updated),
+                'payment_events_deleted': int(payment_events_deleted),
+                'bonus_ledger_deleted': int(bonus_ledger_deleted),
+                'referral_rewards_deleted': int(referral_rewards_deleted),
+                'users_bonus_reset': int(users_updated),
+            }
+
+        # Hard reset: wipe key/payment/referral history from DB.
+        versions = (
+            await self.session.scalars(
+                select(VPNKeyVersion).where(VPNKeyVersion.is_active.is_(True))
             )
-        ).rowcount or 0
-        subscriptions_updated = (
-            await self.session.execute(
-                update(Subscription).values(status=SubscriptionStatus.REVOKED)
-            )
-        ).rowcount or 0
-        versions_updated = (
-            await self.session.execute(
-                update(VPNKeyVersion).values(is_active=False, revoked_at=now, connection_uri=None)
-            )
-        ).rowcount or 0
-        payments_updated = (
-            await self.session.execute(
-                update(Payment).values(status=PaymentStatus.CANCELED, amount=0, processed_at=now)
-            )
-        ).rowcount or 0
-        payment_events_deleted = (await self.session.execute(delete(PaymentEvent))).rowcount or 0
+        ).all()
+
+        panel_revoked = 0
+        for version in versions:
+            try:
+                await self.threexui_service.revoke_vpn_client(version)
+                panel_revoked += 1
+            except Exception:  # noqa: BLE001
+                logger.warning('Hard reset: failed to revoke panel client for version %s', version.id)
+
+        keys_count_before = int((await self.session.scalar(select(func.count(VPNKey.id)))) or 0)
+        subscriptions_count_before = int((await self.session.scalar(select(func.count(Subscription.id)))) or 0)
+        versions_count_before = int((await self.session.scalar(select(func.count(VPNKeyVersion.id)))) or 0)
+
         bonus_ledger_deleted = (await self.session.execute(delete(BonusDayLedger))).rowcount or 0
         referral_rewards_deleted = (await self.session.execute(delete(ReferralReward))).rowcount or 0
+        referrals_deleted = (await self.session.execute(delete(Referral))).rowcount or 0
+        payment_events_deleted = (await self.session.execute(delete(PaymentEvent))).rowcount or 0
+        payments_deleted = (await self.session.execute(delete(Payment))).rowcount or 0
+        keys_deleted = (await self.session.execute(delete(VPNKey))).rowcount or 0
+        # Safety pass in case some rows are orphaned and were not deleted via cascade.
+        versions_cleanup_deleted = (await self.session.execute(delete(VPNKeyVersion))).rowcount or 0
+        subscriptions_cleanup_deleted = (await self.session.execute(delete(Subscription))).rowcount or 0
+        audit_logs_deleted = (await self.session.execute(delete(AuditLog))).rowcount or 0
         users_updated = (await self.session.execute(update(User).values(bonus_days_balance=0))).rowcount or 0
 
         await self.session.commit()
         return {
-            'keys_revoked': int(keys_updated),
-            'subscriptions_revoked': int(subscriptions_updated),
-            'versions_deactivated': int(versions_updated),
-            'payments_zeroed': int(payments_updated),
+            'mode': 'hard',
+            'panel_revoked': int(panel_revoked),
+            'keys_deleted': int(keys_deleted),
+            'subscriptions_deleted': int(subscriptions_count_before),
+            'versions_deleted': int(versions_count_before),
+            'subscriptions_cleanup_deleted': int(subscriptions_cleanup_deleted),
+            'versions_cleanup_deleted': int(versions_cleanup_deleted),
+            'keys_count_before': int(keys_count_before),
+            'payments_deleted': int(payments_deleted),
             'payment_events_deleted': int(payment_events_deleted),
-            'bonus_ledger_deleted': int(bonus_ledger_deleted),
+            'referrals_deleted': int(referrals_deleted),
             'referral_rewards_deleted': int(referral_rewards_deleted),
+            'bonus_ledger_deleted': int(bonus_ledger_deleted),
+            'audit_logs_deleted': int(audit_logs_deleted),
             'users_bonus_reset': int(users_updated),
         }
 

@@ -5,10 +5,12 @@ import {
   KeyRound,
   Plus,
   RefreshCw,
+  Search,
   Shield,
   Sparkles,
   TrendingUp,
   UserCog,
+  UserRoundSearch,
   Wallet,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -66,6 +68,14 @@ type AdminReferral = {
   referred_user_id: string;
   status: string;
   created_at: string;
+};
+type LookupUserResponse = {
+  id: string;
+  referral_code: string;
+  bonus_days_balance: number;
+  created_at: string;
+  telegram_username: string | null;
+  telegram_user_id: number | null;
 };
 
 type PlanForm = {
@@ -132,12 +142,23 @@ export function AdminPage() {
   const [grantForm, setGrantForm] = useState<GrantForm>(defaultGrantForm);
   const [bonusForm, setBonusForm] = useState<BonusForm>(defaultBonusForm);
   const [revokeReason, setRevokeReason] = useState<Record<string, string>>({});
-  const [softResetLoading, setSoftResetLoading] = useState(false);
+  const [hardReset, setHardReset] = useState(true);
+  const [lookupUsername, setLookupUsername] = useState('');
+  const [lookupUser, setLookupUser] = useState<LookupUserResponse | null>(null);
+  const [searchUsers, setSearchUsers] = useState('');
+  const [syncingPanel, setSyncingPanel] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const pendingPayments = useMemo(
     () => payments.filter((payment) => payment.status === 'pending' || payment.status === 'waiting_for_capture'),
     [payments],
   );
+
+  const filteredUsers = useMemo(() => {
+    const query = searchUsers.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter((user) => user.id.toLowerCase().includes(query) || user.referral_code.toLowerCase().includes(query));
+  }, [users, searchUsers]);
 
   const loadData = async () => {
     try {
@@ -149,9 +170,9 @@ export function AdminPage() {
           apiRequest<AdminStats>('/admin/stats'),
           apiRequest<ReferralSettings>('/admin/settings/referral'),
           apiRequest<AdminUser[]>('/admin/users?limit=100'),
-          apiRequest<AdminKey[]>('/admin/keys?limit=120'),
-          apiRequest<AdminSubscription[]>('/admin/subscriptions?limit=120'),
-          apiRequest<AdminReferral[]>('/admin/referrals?limit=120'),
+          apiRequest<AdminKey[]>('/admin/keys?limit=150'),
+          apiRequest<AdminSubscription[]>('/admin/subscriptions?limit=150'),
+          apiRequest<AdminReferral[]>('/admin/referrals?limit=150'),
         ]);
 
       setPlans(plansData.items);
@@ -175,12 +196,10 @@ export function AdminPage() {
         };
       });
       setEditing(editState);
-
       setGrantForm((prev) => ({
         ...prev,
         plan_id: prev.plan_id || plansData.items.find((item) => item.is_active)?.id || plansData.items[0]?.id || '',
       }));
-
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки админ-данных');
@@ -291,7 +310,7 @@ export function AdminPage() {
   };
 
   const revokeKey = async (keyId: string) => {
-    const reason = revokeReason[keyId] || 'manual_revoke';
+    const reason = (revokeReason[keyId] || 'manual_revoke').trim();
     try {
       await apiRequest(`/admin/keys/${keyId}/revoke`, toJsonBody({ reason }));
       setMessage(`Ключ ${keyId} отозван`);
@@ -302,25 +321,43 @@ export function AdminPage() {
   };
 
   const resetKeysAndEarnings = async () => {
-    const confirmText = window.prompt('Подтвердите мягкий сброс. Введите RESET для продолжения.');
+    const confirmText = window.prompt('Подтвердите очистку: введите RESET.');
     if (!confirmText) return;
 
     try {
-      setSoftResetLoading(true);
-      const result = await apiRequest<{
-        ok: boolean;
-        keys_revoked: number;
-        payments_zeroed: number;
-      }>('/admin/system/reset-keys-and-earnings', toJsonBody({ confirm_text: confirmText }));
+      setResetLoading(true);
+      const result = await apiRequest<Record<string, unknown>>('/admin/system/reset-keys-and-earnings', toJsonBody({
+        confirm_text: confirmText,
+        mode: hardReset ? 'hard' : 'soft',
+      }));
 
       if (result.ok) {
-        setMessage(`Сброс выполнен: ключей отозвано ${result.keys_revoked}, платежей обнулено ${result.payments_zeroed}.`);
+        setMessage(`Очистка завершена в режиме ${hardReset ? 'hard' : 'soft'}.`);
+        setLookupUser(null);
+        setGrantForm(defaultGrantForm);
+        setBonusForm(defaultBonusForm);
         await loadData();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось выполнить сброс данных');
+      setError(err instanceof Error ? err.message : 'Не удалось выполнить очистку');
     } finally {
-      setSoftResetLoading(false);
+      setResetLoading(false);
+    }
+  };
+
+  const syncPanelNow = async () => {
+    try {
+      setSyncingPanel(true);
+      const response = await apiRequest<{ ok: boolean; processed: number; changed: number }>(
+        '/admin/system/sync-panel',
+        toJsonBody({}),
+      );
+      setMessage(`Синхронизация панели: обработано ${response.processed}, изменений ${response.changed}.`);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось синхронизировать данные панели');
+    } finally {
+      setSyncingPanel(false);
     }
   };
 
@@ -334,7 +371,7 @@ export function AdminPage() {
       const result = await apiRequest<BindPanelKeyResponse>('/admin/keys/bind-by-username', toJsonBody(payload));
       setMessage(
         `Ключ привязан к @${bindUsername.replace('@', '')}. key_id=${result.key_id}${
-          result.connection_uri ? `, uri=${result.connection_uri}` : ''
+          result.connection_uri ? ', URI сохранен' : ''
         }`,
       );
       setBindUsername('');
@@ -346,9 +383,32 @@ export function AdminPage() {
     }
   };
 
+  const lookupByUsername = async () => {
+    const username = lookupUsername.trim();
+    if (!username) {
+      setError('Введите @username');
+      return;
+    }
+
+    try {
+      const user = await apiRequest<LookupUserResponse>(
+        `/admin/users/lookup?username=${encodeURIComponent(username)}`,
+      );
+      setLookupUser(user);
+      setGrantForm((prev) => ({ ...prev, user_id: user.id }));
+      setBonusForm((prev) => ({ ...prev, user_id: user.id }));
+      setMessage(`Пользователь найден: ${user.id}`);
+      setError(null);
+    } catch (err) {
+      setLookupUser(null);
+      setError(err instanceof Error ? err.message : 'Пользователь не найден');
+    }
+  };
+
   const attachUser = (userId: string) => {
     setBonusForm((prev) => ({ ...prev, user_id: userId }));
     setGrantForm((prev) => ({ ...prev, user_id: userId }));
+    setMessage(`user_id установлен: ${userId}`);
   };
 
   if (loading) {
@@ -361,7 +421,7 @@ export function AdminPage() {
 
   return (
     <section className="stack">
-      <PageHeader title="Админ-панель" subtitle="Финансы, пользователи, ключи, подписки и системные операции" />
+      <PageHeader title="Админ-панель" subtitle="Глубокое управление пользователями, ключами, оплатами и очисткой данных" />
 
       {stats && (
         <div className="stat-grid">
@@ -382,38 +442,49 @@ export function AdminPage() {
           </article>
           <article className="glass-card stat-card">
             <span className="stat-icon"><RefreshCw size={16} /></span>
-            <p className="stat-label">Ожидают решения</p>
+            <p className="stat-label">Ожидают</p>
             <p className="stat-value">{stats.pending_payments}</p>
           </article>
         </div>
       )}
 
       <article className="glass-card">
-        <p className="title-line row-inline"><Gift size={16} /> Реферальная награда</p>
-        <p className="muted">Бонусные дни за первую успешную оплату приглашенного пользователя.</p>
+        <p className="title-line row-inline"><UserRoundSearch size={16} /> Поиск пользователя по @username</p>
         <div className="admin-grid">
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={3650}
-            value={referralBonusDays}
-            onChange={(e) => setReferralBonusDays(Number(e.target.value || 0))}
-          />
+          <div className="input-wrap">
+            <Search size={16} />
+            <input
+              className="input"
+              placeholder="@username"
+              value={lookupUsername}
+              onChange={(e) => setLookupUsername(e.target.value)}
+            />
+          </div>
         </div>
         <div className="admin-actions">
-          <button className="btn btn-primary" onClick={() => void saveReferralSettings()}>
-            Сохранить
-          </button>
-          <button className="btn btn-ghost" onClick={() => void loadData()}>
-            <RefreshCw size={16} /> Обновить данные
+          <button className="btn btn-primary" onClick={() => void lookupByUsername()}>
+            Найти пользователя
           </button>
         </div>
+        {lookupUser && (
+          <div className="admin-item">
+            <p className="title-line">{lookupUser.telegram_username ? `@${lookupUser.telegram_username}` : lookupUser.id}</p>
+            <p className="muted">user_id: {lookupUser.id}</p>
+            <p className="muted">tg_id: {lookupUser.telegram_user_id ?? 'не указан'}</p>
+            <p className="muted">Бонусные дни: {lookupUser.bonus_days_balance}</p>
+          </div>
+        )}
       </article>
 
       <article className="glass-card">
-        <p className="title-line row-inline"><Shield size={16} /> Ручные операции с пользователями</p>
-        <p className="muted">Начисление бонусных дней и выдача подписки без оплаты.</p>
+        <p className="title-line row-inline"><Shield size={16} /> Ручные действия</p>
+        <p className="muted">Выдача подписки, бонусные дни, синхронизация панели 3x-ui.</p>
+        <div className="admin-actions">
+          <button className="btn btn-soft" onClick={() => void syncPanelNow()} disabled={syncingPanel}>
+            <RefreshCw size={16} className={syncingPanel ? 'spin' : ''} /> Синхронизировать панель
+          </button>
+        </div>
+
         <div className="admin-grid">
           <input
             className="input"
@@ -430,7 +501,7 @@ export function AdminPage() {
           />
           <input
             className="input"
-            placeholder="Причина (min 3 символа)"
+            placeholder="Причина"
             value={bonusForm.reason}
             onChange={(e) => setBonusForm((prev) => ({ ...prev, reason: e.target.value }))}
           />
@@ -441,7 +512,7 @@ export function AdminPage() {
           </button>
         </div>
 
-        <div className="admin-grid" style={{ marginTop: 12 }}>
+        <div className="admin-grid" style={{ marginTop: 10 }}>
           <input
             className="input"
             placeholder="user_id"
@@ -462,13 +533,13 @@ export function AdminPage() {
           </select>
           <input
             className="input"
-            placeholder="key_id (необязательно, если нужно продлить существующий)"
+            placeholder="key_id (опционально)"
             value={grantForm.key_id}
             onChange={(e) => setGrantForm((prev) => ({ ...prev, key_id: e.target.value }))}
           />
           <input
             className="input"
-            placeholder="Название нового ключа (если key_id пустой)"
+            placeholder="Название нового ключа (если key_id пуст)"
             value={grantForm.key_name}
             onChange={(e) => setGrantForm((prev) => ({ ...prev, key_name: e.target.value }))}
           />
@@ -481,28 +552,30 @@ export function AdminPage() {
       </article>
 
       <article className="glass-card">
-        <p className="title-line">Привязка ключа из панели к @user</p>
-        <p className="muted">Импортирует существующий клиент 3x-ui пользователю, даже если он еще не запускал бота.</p>
+        <p className="title-line row-inline"><Gift size={16} /> Реферальная награда</p>
         <div className="admin-grid">
           <input
             className="input"
-            placeholder="@username"
-            value={bindUsername}
-            onChange={(e) => setBindUsername(e.target.value)}
-          />
-          <input
-            className="input"
-            placeholder="client_uuid (необязательно)"
-            value={bindClientUuid}
-            onChange={(e) => setBindClientUuid(e.target.value)}
-          />
-          <input
-            className="input"
             type="number"
-            placeholder="inbound_id (необязательно)"
-            value={bindInboundId}
-            onChange={(e) => setBindInboundId(e.target.value)}
+            min={0}
+            max={3650}
+            value={referralBonusDays}
+            onChange={(e) => setReferralBonusDays(Number(e.target.value || 0))}
           />
+        </div>
+        <div className="admin-actions">
+          <button className="btn btn-primary" onClick={() => void saveReferralSettings()}>
+            Сохранить награду
+          </button>
+        </div>
+      </article>
+
+      <article className="glass-card">
+        <p className="title-line">Привязка ключа из панели к @user</p>
+        <div className="admin-grid">
+          <input className="input" placeholder="@username" value={bindUsername} onChange={(e) => setBindUsername(e.target.value)} />
+          <input className="input" placeholder="client_uuid (необязательно)" value={bindClientUuid} onChange={(e) => setBindClientUuid(e.target.value)} />
+          <input className="input" type="number" placeholder="inbound_id (необязательно)" value={bindInboundId} onChange={(e) => setBindInboundId(e.target.value)} />
         </div>
         <button className="btn btn-primary" onClick={() => void bindPanelKey()}>
           <KeyRound size={16} /> Привязать ключ
@@ -516,9 +589,8 @@ export function AdminPage() {
             <RefreshCw size={16} /> Обновить
           </button>
         </div>
-
         {pendingPayments.length === 0 ? (
-          <EmptyState title="Нет ожидающих платежей" text="Все заявки обработаны." />
+          <EmptyState title="Нет ожидающих платежей" text="Все заявки уже обработаны." />
         ) : (
           <div className="stack">
             {pendingPayments.map((payment) => (
@@ -542,71 +614,65 @@ export function AdminPage() {
       </article>
 
       <article className="glass-card">
-        <p className="title-line row-inline"><Plus size={16} /> Создать тариф</p>
+        <p className="title-line row-inline"><Plus size={16} /> Тарифы</p>
         <div className="admin-grid">
           <input className="input" placeholder="Название" value={createForm.name} onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))} />
           <input className="input" placeholder="Дней" type="number" min={1} value={createForm.duration_days} onChange={(e) => setCreateForm((prev) => ({ ...prev, duration_days: Number(e.target.value || 1) }))} />
           <input className="input" placeholder="Цена" value={createForm.price} onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))} />
           <input className="input" placeholder="Валюта" value={createForm.currency} onChange={(e) => setCreateForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))} />
           <input className="input" placeholder="Порядок" type="number" value={createForm.sort_order} onChange={(e) => setCreateForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 0) }))} />
-          <label className="toggle-row">
-            <input type="checkbox" checked={createForm.is_active} onChange={(e) => setCreateForm((prev) => ({ ...prev, is_active: e.target.checked }))} />
-            Активен
-          </label>
         </div>
-        <button className="btn btn-primary" onClick={() => void createPlan()}>
-          <Plus size={16} /> Добавить тариф
-        </button>
-      </article>
-
-      <article className="glass-card">
-        <p className="title-line">Существующие тарифы</p>
-        {plans.length === 0 ? (
-          <EmptyState title="Тарифов нет" text="Создайте первый тариф." />
-        ) : (
-          <div className="stack">
-            {plans.map((plan) => {
-              const form = editing[plan.id];
-              if (!form) return null;
-
-              return (
-                <article key={plan.id} className="admin-item">
-                  <div className="admin-grid">
-                    <input className="input" value={form.name} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, name: e.target.value } }))} />
-                    <input className="input" type="number" min={1} value={form.duration_days} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, duration_days: Number(e.target.value || 1) } }))} />
-                    <input className="input" value={form.price} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, price: e.target.value } }))} />
-                    <input className="input" value={form.currency} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, currency: e.target.value.toUpperCase() } }))} />
-                    <input className="input" type="number" value={form.sort_order} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, sort_order: Number(e.target.value || 0) } }))} />
-                    <label className="toggle-row">
-                      <input type="checkbox" checked={form.is_active} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, is_active: e.target.checked } }))} />
-                      Активен
-                    </label>
-                  </div>
-                  <button className="btn btn-primary" onClick={() => void updatePlan(plan.id)}>
+        <div className="admin-actions">
+          <button className="btn btn-primary" onClick={() => void createPlan()}>
+            Создать тариф
+          </button>
+        </div>
+        <div className="stack">
+          {plans.map((plan) => {
+            const form = editing[plan.id];
+            if (!form) return null;
+            return (
+              <article key={plan.id} className="admin-item">
+                <div className="admin-grid">
+                  <input className="input" value={form.name} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, name: e.target.value } }))} />
+                  <input className="input" type="number" min={1} value={form.duration_days} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, duration_days: Number(e.target.value || 1) } }))} />
+                  <input className="input" value={form.price} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, price: e.target.value } }))} />
+                  <input className="input" value={form.currency} onChange={(e) => setEditing((prev) => ({ ...prev, [plan.id]: { ...form, currency: e.target.value.toUpperCase() } }))} />
+                </div>
+                <div className="admin-actions">
+                  <button className="btn btn-soft" onClick={() => void updatePlan(plan.id)}>
                     Сохранить
                   </button>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </article>
 
       <article className="glass-card">
         <p className="title-line row-inline"><UserCog size={16} /> Пользователи</p>
-        {users.length === 0 ? (
-          <EmptyState title="Пользователей нет" text="Список пока пуст." />
+        <div className="input-wrap">
+          <Search size={16} />
+          <input
+            className="input"
+            placeholder="Поиск по id/реф-коду"
+            value={searchUsers}
+            onChange={(e) => setSearchUsers(e.target.value)}
+          />
+        </div>
+        {filteredUsers.length === 0 ? (
+          <EmptyState title="Пользователи не найдены" text="Измените строку поиска." />
         ) : (
           <div className="stack">
-            {users.slice(0, 20).map((user) => (
+            {filteredUsers.slice(0, 30).map((user) => (
               <article className="admin-item" key={user.id}>
                 <p className="title-line">{user.id}</p>
                 <p className="muted">Реф-код: {user.referral_code}</p>
-                <p className="muted">Бонусные дни: {user.bonus_days_balance}</p>
-                <p className="muted">Создан: {new Date(user.created_at).toLocaleString()}</p>
-                <div className="action-row">
+                <p className="muted">Бонусы: {user.bonus_days_balance}</p>
+                <div className="admin-actions">
                   <button className="btn btn-ghost" onClick={() => attachUser(user.id)}>
-                    Использовать в формах выше
+                    Использовать user_id
                   </button>
                 </div>
               </article>
@@ -618,10 +684,10 @@ export function AdminPage() {
       <article className="glass-card">
         <p className="title-line row-inline"><KeyRound size={16} /> Ключи</p>
         {keys.length === 0 ? (
-          <EmptyState title="Ключей нет" text="Список ключей пуст." />
+          <EmptyState title="Ключей нет" text="Список пуст." />
         ) : (
           <div className="stack">
-            {keys.slice(0, 40).map((key) => (
+            {keys.slice(0, 50).map((key) => (
               <article className="admin-item" key={key.id}>
                 <div className="row-between">
                   <p className="title-line">{key.display_name}</p>
@@ -629,18 +695,17 @@ export function AdminPage() {
                 </div>
                 <p className="muted">key_id: {key.id}</p>
                 <p className="muted">owner_id: {key.owner_id}</p>
-                <p className="muted">Создан: {new Date(key.created_at).toLocaleString()}</p>
                 <div className="admin-grid">
                   <input
                     className="input"
-                    placeholder="reason (например manual_revoke)"
+                    placeholder="Причина отзыва"
                     value={revokeReason[key.id] ?? ''}
                     onChange={(e) => setRevokeReason((prev) => ({ ...prev, [key.id]: e.target.value }))}
                   />
                 </div>
-                <div className="action-row">
+                <div className="admin-actions">
                   <button className="btn btn-soft" onClick={() => void revokeKey(key.id)}>
-                    Отозвать ключ
+                    Отозвать
                   </button>
                 </div>
               </article>
@@ -650,46 +715,23 @@ export function AdminPage() {
       </article>
 
       <article className="glass-card">
-        <p className="title-line">Подписки</p>
-        {subscriptions.length === 0 ? (
-          <EmptyState title="Подписок нет" text="Список подписок пуст." />
-        ) : (
-          <div className="stack">
-            {subscriptions.slice(0, 20).map((item) => (
-              <article className="admin-item" key={item.id}>
-                <p className="title-line">{item.id}</p>
-                <p className="muted">vpn_key_id: {item.vpn_key_id}</p>
-                <p className="muted">plan_id: {item.plan_id}</p>
-                <p className="muted">Статус: {item.status}</p>
-                <p className="muted">До: {new Date(item.expires_at).toLocaleString()}</p>
-              </article>
-            ))}
-          </div>
-        )}
+        <p className="title-line">Подписки: {subscriptions.length}</p>
+        <p className="muted">Реферальные связи: {referrals.length}</p>
       </article>
 
       <article className="glass-card">
-        <p className="title-line">Реферальные связи</p>
-        {referrals.length === 0 ? (
-          <EmptyState title="Рефералов нет" text="Список пока пуст." />
-        ) : (
-          <div className="stack">
-            {referrals.slice(0, 20).map((item) => (
-              <article className="admin-item" key={item.id}>
-                <p className="muted">referrer: {item.referrer_user_id}</p>
-                <p className="muted">referred: {item.referred_user_id}</p>
-                <p className="muted">status: {item.status}</p>
-              </article>
-            ))}
-          </div>
-        )}
-      </article>
-
-      <article className="glass-card">
-        <p className="title-line">Системный сброс</p>
-        <p className="muted">Мягкий сброс: ключи/подписки/платежи деактивируются, пользователи и тарифы сохраняются.</p>
-        <button className="btn btn-danger-soft" onClick={() => void resetKeysAndEarnings()} disabled={softResetLoading}>
-          {softResetLoading ? 'Выполняется...' : 'Мягко обнулить ключи и заработок'}
+        <p className="title-line">Очистка данных</p>
+        <p className="muted">
+          {hardReset
+            ? 'HARD: удаляет историю ключей, подписок, платежей, рефералов, журналов.'
+            : 'SOFT: только деактивация и обнуление, история может сохраниться.'}
+        </p>
+        <label className="toggle-row">
+          <input type="checkbox" checked={hardReset} onChange={(e) => setHardReset(e.target.checked)} />
+          Включить полную зачистку (hard)
+        </label>
+        <button className="btn btn-danger-soft" onClick={() => void resetKeysAndEarnings()} disabled={resetLoading}>
+          {resetLoading ? 'Выполняется...' : 'Запустить очистку'}
         </button>
       </article>
 

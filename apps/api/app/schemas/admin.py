@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -107,6 +108,16 @@ class AdminReferralSettingsUpdateRequest(BaseModel):
 
 class AdminResetKeysEarningsRequest(BaseModel):
     confirm_text: str = Field(min_length=5, max_length=32)
+    mode: Literal['soft', 'hard'] = 'hard'
+
+
+class AdminUserLookupOut(BaseModel):
+    id: UUID
+    referral_code: str
+    bonus_days_balance: int
+    created_at: datetime
+    telegram_username: str | None = None
+    telegram_user_id: int | None = None
 
 
 class AdminBindPanelKeyRequest(BaseModel):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from app.schemas.admin import (
     AdminPlansListResponse,
     AdminReferralStatOut,
     AdminRevokeKeyRequest,
+    AdminUserLookupOut,
     AdminStatsOut,
     AdminSubscriptionOut,
     AdminUserOut,
@@ -47,6 +48,19 @@ async def admin_list_users(
 ):
     service = AdminService(session, threexui_service)
     return await service.list_users(limit=limit, offset=offset)
+
+
+@router.get('/users/lookup', response_model=AdminUserLookupOut)
+async def admin_lookup_user_by_username(
+    username: str = Query(min_length=1, max_length=64),
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    user = await service.lookup_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    return AdminUserLookupOut(**user)
 
 
 @router.get('/payments', response_model=AdminPaymentsListResponse)
@@ -176,7 +190,17 @@ async def admin_reset_keys_and_earnings(
     threexui_service: ThreeXUIService = Depends(threexui_dependency),
 ):
     service = AdminService(session, threexui_service)
-    stats = await service.reset_keys_and_earnings(payload.confirm_text)
+    stats = await service.reset_keys_and_earnings(payload.confirm_text, payload.mode)
+    return {'ok': True, **stats}
+
+
+@router.post('/system/sync-panel')
+async def admin_sync_panel(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    stats = await service.sync_keys_with_panel()
     return {'ok': True, **stats}
 
 
