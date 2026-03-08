@@ -4,11 +4,14 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.enums import VPNKeyStatus
 from app.models.audit_log import AuditLog
+from app.models.payment import Payment
+from app.models.vpn_key import VPNKey
 from app.models.vpn_key_version import VPNKeyVersion
 from app.repositories.vpn_key_repository import VPNKeyRepository
 
@@ -123,7 +126,12 @@ class KeyService:
             )
         )
         await self.session.flush()
-        await self.session.delete(key)
+        await self.session.execute(
+            update(Payment)
+            .where(Payment.vpn_key_id == key.id)
+            .values(vpn_key_id=None)
+        )
+        await self.session.execute(delete(VPNKey).where(VPNKey.id == key.id))
         await self.session.commit()
         return {'ok': True, 'key_id': str(key_id)}
 

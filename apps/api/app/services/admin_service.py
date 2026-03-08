@@ -487,7 +487,12 @@ class AdminService:
         )
         self.session.add(audit)
         await self.session.flush()
-        await self.session.delete(key)
+        await self.session.execute(
+            update(Payment)
+            .where(Payment.vpn_key_id == key.id)
+            .values(vpn_key_id=None)
+        )
+        await self.session.execute(delete(VPNKey).where(VPNKey.id == key.id))
         await self.session.commit()
         return {'ok': True, 'key_id': str(key_id)}
 
