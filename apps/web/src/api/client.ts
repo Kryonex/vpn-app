@@ -4,9 +4,15 @@ function trimTrailingSlashes(value: string): string {
 
 let accessTokenCache: string | null = null;
 
+declare global {
+  interface Window {
+    __VPN_ACCESS_TOKEN__?: string;
+  }
+}
+
 function safeReadToken(): string | null {
   try {
-    const token = localStorage.getItem('session_token');
+    const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
     return token?.trim() || null;
   } catch {
     return null;
@@ -16,6 +22,7 @@ function safeReadToken(): string | null {
 function safeWriteToken(token: string): void {
   try {
     localStorage.setItem('session_token', token.trim());
+    sessionStorage.setItem('session_token', token.trim());
   } catch {
     // localStorage can be flaky in embedded webviews, memory cache still keeps auth alive.
   }
@@ -24,6 +31,7 @@ function safeWriteToken(token: string): void {
 function safeRemoveToken(): void {
   try {
     localStorage.removeItem('session_token');
+    sessionStorage.removeItem('session_token');
   } catch {
     // Ignore storage cleanup issues.
   }
@@ -54,11 +62,21 @@ export function getAccessToken(): string | null {
     return accessTokenCache;
   }
 
+  const windowToken = window.__VPN_ACCESS_TOKEN__?.trim() || null;
+  if (windowToken) {
+    accessTokenCache = windowToken;
+    console.info('[auth] access token restored', { restored: true, source: 'window' });
+    return windowToken;
+  }
+
   const restored = safeReadToken();
   accessTokenCache = restored;
+  if (restored) {
+    window.__VPN_ACCESS_TOKEN__ = restored;
+  }
   console.info('[auth] access token restored', {
     restored: Boolean(restored),
-    source: restored ? 'localStorage' : 'none',
+    source: restored ? 'storage' : 'none',
   });
   return restored;
 }
@@ -67,6 +85,7 @@ export function setAccessToken(token: string): void {
   const normalized = token.trim();
   accessTokenCache = normalized || null;
   if (normalized) {
+    window.__VPN_ACCESS_TOKEN__ = normalized;
     safeWriteToken(normalized);
   }
   console.info('[auth] access token stored', {
@@ -76,6 +95,7 @@ export function setAccessToken(token: string): void {
 
 export function clearAccessToken(): void {
   accessTokenCache = null;
+  delete window.__VPN_ACCESS_TOKEN__;
   safeRemoveToken();
   console.info('[auth] access token cleared');
 }
@@ -85,7 +105,9 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   const requestUrl = `${API_BASE}${path}`;
 
   const headers = new Headers(options?.headers);
-  headers.set('Content-Type', 'application/json');
+  if (options?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
