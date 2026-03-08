@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [telegramProfile, setTelegramProfile] = useState<TGUser | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const configuredAdminId = Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0) || 0;
 
   const refreshMe = async () => {
     const data = await apiRequest<MeResponse>('/me');
@@ -67,9 +68,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             '/auth/telegram',
             toJsonBody({ init_data: initData }),
           );
+          console.info('[auth] access token received', {
+            received: Boolean(auth.access_token),
+          });
           token = auth.access_token;
           setAccessToken(token);
         } else {
+          console.info('[auth] access token already available', {
+            available: Boolean(token),
+          });
           setAccessToken(token);
         }
 
@@ -87,14 +94,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void bootstrap();
   }, []);
 
+  const isAdmin =
+    Boolean(me?.telegram?.telegram_user_id) &&
+    configuredAdminId > 0 &&
+    me?.telegram?.telegram_user_id === configuredAdminId;
+
+  useEffect(() => {
+    console.info('[auth] admin eligibility resolved', {
+      hasMe: Boolean(me),
+      hasTelegramUser: Boolean(me?.telegram?.telegram_user_id),
+      configuredAdminId: configuredAdminId > 0,
+      isAdmin,
+    });
+  }, [configuredAdminId, isAdmin, me]);
+
   const value = useMemo<AuthState>(
     () => ({
       isLoading,
       isAuthenticated: Boolean(me),
-      isAdmin:
-        Boolean(me?.telegram?.telegram_user_id) &&
-        Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0) > 0 &&
-        me?.telegram?.telegram_user_id === Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0),
+      isAdmin,
       telegramProfile,
       me,
       systemStatus,
@@ -102,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshMe,
       refreshSystemStatus,
     }),
-    [isLoading, me, systemStatus, error, telegramProfile],
+    [isLoading, isAdmin, me, systemStatus, error, telegramProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

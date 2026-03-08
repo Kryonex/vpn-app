@@ -55,30 +55,29 @@ export function getAccessToken(): string | null {
   }
   const stored = safeGetStorage('session_token');
   accessTokenCache = stored?.trim() || null;
+  console.info('[auth] access token restored', {
+    restored: Boolean(accessTokenCache),
+  });
   return accessTokenCache;
 }
 
 export function setAccessToken(token: string): void {
   accessTokenCache = token.trim();
   safeSetStorage('session_token', accessTokenCache);
+  console.info('[auth] access token stored', {
+    stored: Boolean(accessTokenCache),
+  });
 }
 
 export function clearAccessToken(): void {
   accessTokenCache = null;
   safeRemoveStorage('session_token');
-}
-
-function getAdminToken(): string | null {
-  const envToken = (import.meta.env.VITE_ADMIN_BEARER_TOKEN as string | undefined)?.trim();
-  if (envToken) {
-    return envToken;
-  }
-  return getAccessToken();
+  console.info('[auth] access token cleared');
 }
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const isAdminPath = path.startsWith('/admin');
-  const token = isAdminPath ? getAdminToken() : getAccessToken();
+  const token = getAccessToken();
   const requestUrl = `${API_BASE}${path}`;
 
   const headers = new Headers(options?.headers);
