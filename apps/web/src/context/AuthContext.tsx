@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiRequest, clearAccessToken, getAccessToken, setAccessToken, toJsonBody } from '../api/client';
 import { initTelegramSDK, type TGUser, waitForTelegramWebApp } from '../telegram';
@@ -19,6 +19,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const bootstrapStartedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [telegramProfile, setTelegramProfile] = useState<TGUser | null>(null);
@@ -37,6 +38,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    if (bootstrapStartedRef.current) {
+      console.info('[auth] bootstrap skipped', {
+        reason: 'already_started',
+      });
+      return;
+    }
+    bootstrapStartedRef.current = true;
+
     const bootstrap = async () => {
       try {
         setIsLoading(true);
@@ -51,8 +60,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let token = getAccessToken();
         if (!token) {
-          // Важно: отправляем raw Telegram.WebApp.initData как есть.
-          // Не реконструируем строку из initDataUnsafe.
           const rawInitData = window.Telegram?.WebApp?.initData || webApp?.initData || '';
           const initData = rawInitData || import.meta.env.VITE_DEV_INIT_DATA || '';
           console.info('[auth] initData source', {
@@ -119,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshMe,
       refreshSystemStatus,
     }),
-    [isLoading, isAdmin, me, systemStatus, error, telegramProfile],
+    [error, isAdmin, isLoading, me, systemStatus, telegramProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
