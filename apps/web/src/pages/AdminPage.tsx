@@ -20,6 +20,9 @@ type AdminPlansList = { items: Plan[] };
 type ReferralSettings = { referral_bonus_days: number };
 type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
+type AdminLoadResult =
+  | { name: string; ok: true; value: unknown }
+  | { name: string; ok: false; reason: string };
 
 const statusOptions: Array<{ value: SystemStatus['status']; label: string }> = [
   { value: 'online', label: 'Онлайн' },
@@ -77,23 +80,90 @@ export function AdminPage() {
   const load = async () => {
     setLoading(true);
     setError(null);
+    const requests: Array<{ name: string; run: () => Promise<unknown> }> = [
+      { name: 'users', run: () => apiRequest<AdminUser[]>('/admin/users?limit=100') },
+      { name: 'keys', run: () => apiRequest<VPNKey[]>('/admin/keys?limit=150') },
+      { name: 'payments', run: () => apiRequest<AdminPaymentsList>('/admin/payments?limit=200') },
+      { name: 'plans', run: () => apiRequest<AdminPlansList>('/admin/plans') },
+      { name: 'subscriptions', run: () => apiRequest<AdminSubscription[]>('/admin/subscriptions?limit=150') },
+      { name: 'referrals', run: () => apiRequest<AdminReferral[]>('/admin/referrals?limit=150') },
+      { name: 'stats', run: () => apiRequest<AdminStats>('/admin/stats') },
+      { name: 'referral_settings', run: () => apiRequest<ReferralSettings>('/admin/settings/referral') },
+      { name: 'system_status', run: () => apiRequest<SystemStatus>('/admin/system/status') },
+    ];
+
     try {
-      const [u, k, p, pl, s, r, st, ref, sys] = await Promise.all([
-        apiRequest<AdminUser[]>('/admin/users?limit=100'),
-        apiRequest<VPNKey[]>('/admin/keys?limit=150'),
-        apiRequest<AdminPaymentsList>('/admin/payments?limit=200'),
-        apiRequest<AdminPlansList>('/admin/plans'),
-        apiRequest<AdminSubscription[]>('/admin/subscriptions?limit=150'),
-        apiRequest<AdminReferral[]>('/admin/referrals?limit=150'),
-        apiRequest<AdminStats>('/admin/stats'),
-        apiRequest<ReferralSettings>('/admin/settings/referral'),
-        apiRequest<SystemStatus>('/admin/system/status'),
-      ]);
-      setUsers(u); setKeys(k); setPayments(p.items); setPlans(pl.items); setSubscriptions(s); setReferrals(r); setStats(st); setReferralSettings(ref); setSystemStatus(sys);
-      setStatusValue(sys.status); setStatusMessage(sys.message ?? ''); setMaintenanceMode(sys.maintenance_mode); setStatusShowToAll(sys.show_to_all); setStatusScheduledFor(sys.scheduled_for ? sys.scheduled_for.slice(0, 16) : '');
-      setPlanDrafts(Object.fromEntries(pl.items.map((plan) => [plan.id, { ...plan, price: String(plan.price) }])) as Record<string, Plan>);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить админ-панель');
+      const results = await Promise.all(
+        requests.map(async ({ name, run }): Promise<AdminLoadResult> => {
+          try {
+            return { name, ok: true, value: await run() };
+          } catch (err) {
+            return {
+              name,
+              ok: false,
+              reason: err instanceof Error ? err.message : 'unknown error',
+            };
+          }
+        }),
+      );
+
+      const failed: string[] = [];
+
+      for (const result of results) {
+        if (!result.ok) {
+          console.warn('[admin] section load failed', { section: result.name, reason: result.reason });
+          failed.push(result.name);
+          continue;
+        }
+
+        switch (result.name) {
+          case 'users':
+            setUsers(result.value as AdminUser[]);
+            break;
+          case 'keys':
+            setKeys(result.value as VPNKey[]);
+            break;
+          case 'payments':
+            setPayments((result.value as AdminPaymentsList).items);
+            break;
+          case 'plans': {
+            const planItems = (result.value as AdminPlansList).items;
+            setPlans(planItems);
+            setPlanDrafts(Object.fromEntries(planItems.map((plan) => [plan.id, { ...plan, price: String(plan.price) }])) as Record<string, Plan>);
+            break;
+          }
+          case 'subscriptions':
+            setSubscriptions(result.value as AdminSubscription[]);
+            break;
+          case 'referrals':
+            setReferrals(result.value as AdminReferral[]);
+            break;
+          case 'stats':
+            setStats(result.value as AdminStats);
+            break;
+          case 'referral_settings':
+            setReferralSettings(result.value as ReferralSettings);
+            break;
+          case 'system_status': {
+            const sys = result.value as SystemStatus;
+            setSystemStatus(sys);
+            setStatusValue(sys.status);
+            setStatusMessage(sys.message ?? '');
+            setMaintenanceMode(sys.maintenance_mode);
+            setStatusShowToAll(sys.show_to_all);
+            setStatusScheduledFor(sys.scheduled_for ? sys.scheduled_for.slice(0, 16) : '');
+            break;
+          }
+          default:
+            break;
+        }
+      }
+
+      if (failed.length === requests.length) {
+        setError('Не удалось загрузить админ-панель.');
+      } else if (failed.length > 0) {
+        setError(`Часть разделов не загрузилась: ${failed.join(', ')}`);
+      }
     } finally {
       setLoading(false);
     }

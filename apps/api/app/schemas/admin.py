@@ -49,7 +49,7 @@ class AdminPaymentsListResponse(BaseModel):
     items: list[PaymentOut]
 
 
-class AdminReferralStatOut(BaseModel):
+class AdminReferralStatOut(BaseSchema):
     id: UUID
     referrer_user_id: UUID
     referred_user_id: UUID
