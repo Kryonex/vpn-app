@@ -20,3 +20,13 @@ class NotificationService:
     async def enqueue_raw(self, payload: dict[str, Any]) -> None:
         await self.redis.lpush(self.settings.notification_queue_key, json.dumps(payload, ensure_ascii=False))
 
+    async def get_queue_size(self) -> int:
+        return int(await self.redis.llen(self.settings.notification_queue_key))
+
+    async def clear_queue(self) -> int:
+        queue_key = self.settings.notification_queue_key
+        size = int(await self.redis.llen(queue_key))
+        if size:
+            await self.redis.delete(queue_key)
+        return size
+

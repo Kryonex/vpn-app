@@ -44,3 +44,13 @@ class AdminMessageSendResponse(BaseModel):
     target_count: int
     duplicate_blocked: bool = False
     audit_log_id: str | None = None
+
+
+class NotificationQueueStatusOut(BaseModel):
+    queue_key: str
+    pending_count: int
+
+
+class NotificationQueueClearResponse(BaseModel):
+    ok: bool
+    cleared_count: int

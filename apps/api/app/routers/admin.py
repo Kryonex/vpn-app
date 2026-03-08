@@ -35,7 +35,14 @@ from app.schemas.admin import (
     AdminSubscriptionOut,
     AdminUserOut,
 )
-from app.schemas.system import AdminMessageSendRequest, AdminMessageSendResponse, AdminSystemStatusUpdateRequest, SystemStatusOut
+from app.schemas.system import (
+    AdminMessageSendRequest,
+    AdminMessageSendResponse,
+    AdminSystemStatusUpdateRequest,
+    NotificationQueueClearResponse,
+    NotificationQueueStatusOut,
+    SystemStatusOut,
+)
 from app.services.admin_service import AdminService
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
@@ -267,6 +274,26 @@ async def admin_send_message(
         duplicate_blocked=duplicate_blocked,
         audit_log_id=audit_log_id,
     )
+
+
+@router.get('/system/notification-queue', response_model=NotificationQueueStatusOut)
+async def admin_get_notification_queue(
+    redis: Redis = Depends(redis_dependency),
+):
+    notifier = NotificationService(redis)
+    return NotificationQueueStatusOut(
+        queue_key=notifier.settings.notification_queue_key,
+        pending_count=await notifier.get_queue_size(),
+    )
+
+
+@router.post('/system/notification-queue/clear', response_model=NotificationQueueClearResponse)
+async def admin_clear_notification_queue(
+    redis: Redis = Depends(redis_dependency),
+):
+    notifier = NotificationService(redis)
+    cleared_count = await notifier.clear_queue()
+    return NotificationQueueClearResponse(ok=True, cleared_count=cleared_count)
 
 
 @router.post('/keys/bind-by-username', response_model=AdminBindPanelKeyResponse)

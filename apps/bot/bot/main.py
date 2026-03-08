@@ -83,8 +83,13 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
             payload = json.loads(raw_payload)
             telegram_user_id = payload.get('telegram_user_id')
             text = payload.get('text')
-            if telegram_user_id and text:
-                await bot.send_message(chat_id=int(telegram_user_id), text=str(text))
+            if not telegram_user_id or not text:
+                logger.warning('Notification worker received malformed payload for queue %s', queue_key)
+                continue
+
+            logger.info('Notification worker dequeued message for telegram_user_id=%s', telegram_user_id)
+            await bot.send_message(chat_id=int(telegram_user_id), text=str(text))
+            logger.info('Notification worker sent message for telegram_user_id=%s', telegram_user_id)
         except Exception as exc:  # noqa: BLE001
             logger.exception('Notification worker error: %s', exc)
 

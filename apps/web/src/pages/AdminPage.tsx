@@ -20,6 +20,7 @@ type AdminPlansList = { items: Plan[] };
 type ReferralSettings = { referral_bonus_days: number };
 type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
+type NotificationQueueStatus = { queue_key: string; pending_count: number };
 type AdminLoadResult =
   | { name: string; ok: true; value: unknown }
   | { name: string; ok: false; reason: string };
@@ -48,6 +49,7 @@ export function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [referralSettings, setReferralSettings] = useState<ReferralSettings>({ referral_bonus_days: 7 });
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
   const [lookupUsername, setLookupUsername] = useState('');
@@ -90,6 +92,7 @@ export function AdminPage() {
       { name: 'stats', run: () => apiRequest<AdminStats>('/admin/stats') },
       { name: 'referral_settings', run: () => apiRequest<ReferralSettings>('/admin/settings/referral') },
       { name: 'system_status', run: () => apiRequest<SystemStatus>('/admin/system/status') },
+      { name: 'notification_queue', run: () => apiRequest<NotificationQueueStatus>('/admin/system/notification-queue') },
     ];
 
     try {
@@ -154,6 +157,9 @@ export function AdminPage() {
             setStatusScheduledFor(sys.scheduled_for ? sys.scheduled_for.slice(0, 16) : '');
             break;
           }
+          case 'notification_queue':
+            setNotificationQueue(result.value as NotificationQueueStatus);
+            break;
           default:
             break;
         }
@@ -243,16 +249,26 @@ export function AdminPage() {
 
         <article className="glass-card admin-section">
           <p className="title-line row-inline"><Send size={16} /> Рассылка</p>
+          <div className="admin-note">
+            Очередь уведомлений: <strong>{notificationQueue?.pending_count ?? 0}</strong>
+            {notificationQueue?.queue_key ? ` · ${notificationQueue.queue_key}` : ''}
+          </div>
           <label className="field"><span className="field-label">Текст сообщения</span><textarea className="input textarea" value={sendText} onChange={(e) => setSendText(e.target.value)} /></label>
           <label className="field"><span className="field-label">ID пользователя</span><input className="input" value={sendUserId} onChange={(e) => setSendUserId(e.target.value)} disabled={sendToAll} placeholder="UUID пользователя" /></label>
           <div className="toggle-list">
             <label className="toggle-row"><input type="checkbox" checked={sendToAll} onChange={(e) => setSendToAll(e.target.checked)} /><span>Отправить всем</span></label>
             <label className="toggle-row"><input type="checkbox" checked={forceSend} onChange={(e) => setForceSend(e.target.checked)} /><span>Игнорировать защиту от дублей</span></label>
           </div>
-          <button className="btn btn-primary" onClick={() => void run(async () => {
-            const result = await apiRequest<MessageResult>('/admin/messages/send', { method: 'POST', body: JSON.stringify({ message: sendText, user_id: sendToAll ? null : sendUserId || null, send_to_all: sendToAll, force: forceSend }) });
-            await afterAction(result.duplicate_blocked ? 'Похожая рассылка уже отправлялась недавно.' : `Сообщение поставлено в очередь для ${result.target_count} получателей.`);
-          })}><BellRing size={16} /> Отправить</button>
+          <div className="input-grid">
+            <button className="btn btn-primary" onClick={() => void run(async () => {
+              const result = await apiRequest<MessageResult>('/admin/messages/send', { method: 'POST', body: JSON.stringify({ message: sendText, user_id: sendToAll ? null : sendUserId || null, send_to_all: sendToAll, force: forceSend }) });
+              await afterAction(result.duplicate_blocked ? 'Похожая рассылка уже отправлялась недавно.' : `Сообщение поставлено в очередь для ${result.target_count} получателей.`);
+            })}><BellRing size={16} /> Отправить</button>
+            <button className="btn btn-ghost" onClick={() => void run(async () => {
+              const result = await apiRequest<{ ok: boolean; cleared_count: number }>('/admin/system/notification-queue/clear', { method: 'POST', body: JSON.stringify({}) });
+              await afterAction(`Очередь очищена. Удалено сообщений: ${result.cleared_count}.`);
+            })}><Trash2 size={16} /> Очистить очередь</button>
+          </div>
         </article>
 
         <article className="glass-card admin-section">
