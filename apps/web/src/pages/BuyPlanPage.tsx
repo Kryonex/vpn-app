@@ -1,5 +1,5 @@
-﻿import { CircleDollarSign, Copy } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { CheckCircle2, CircleDollarSign, Copy } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
@@ -13,12 +13,20 @@ export function BuyPlanPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [transferPhone, setTransferPhone] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState<string | null>(null);
+  const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
+  const successTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     apiRequest<Plan[]>('/plans')
       .then(setPlans)
       .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить тарифы'))
       .finally(() => setLoading(false));
+
+    return () => {
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current);
+      }
+    };
   }, []);
 
   const buy = async (planId: string) => {
@@ -30,6 +38,13 @@ export function BuyPlanPage() {
       setTransferPhone(payment.transfer_phone);
       setTransferNote(payment.transfer_note);
       setMessage('Заявка создана. Выполните перевод по номеру ниже и отправьте чек администратору.');
+      setShowPurchaseSuccess(true);
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current);
+      }
+      successTimerRef.current = window.setTimeout(() => {
+        setShowPurchaseSuccess(false);
+      }, 2600);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать платеж');
@@ -44,10 +59,23 @@ export function BuyPlanPage() {
       {error && <ErrorState text={error} />}
       {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов нет" text="Попробуйте позже." />}
 
+      {showPurchaseSuccess && (
+        <article className="glass-card purchase-success">
+          <div className="purchase-check-wrap">
+            <span className="purchase-check-ripple" />
+            <CheckCircle2 size={28} className="purchase-check-icon" />
+          </div>
+          <p className="title-line">Заявка отправлена</p>
+          <p className="muted">Реквизиты для перевода уже готовы ниже.</p>
+        </article>
+      )}
+
       {transferPhone && (
         <article className="glass-card">
           <p className="title-line">Оплата переводом</p>
-          <p className="muted">Номер для перевода: <strong>{transferPhone}</strong></p>
+          <p className="muted">
+            Номер для перевода: <strong>{transferPhone}</strong>
+          </p>
           <p className="muted">Комментарий к переводу:</p>
           <p className="mono-block">{transferNote || 'VPN оплата'}</p>
           <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(transferPhone)}>
@@ -60,10 +88,12 @@ export function BuyPlanPage() {
         <article key={plan.id} className="glass-card plan-card">
           <div className="row-between">
             <p className="title-line">{plan.name}</p>
-            <p className="price-line">{plan.price} {plan.currency}</p>
+            <p className="price-line">
+              {plan.price} {plan.currency}
+            </p>
           </div>
           <p className="muted">Длительность: {plan.duration_days} дней</p>
-          <button className="btn btn-primary" onClick={() => buy(plan.id)}>
+          <button className="btn btn-primary" onClick={() => void buy(plan.id)}>
             <CircleDollarSign size={16} /> Создать заявку
           </button>
         </article>

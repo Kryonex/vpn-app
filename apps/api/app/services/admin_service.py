@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
+import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -29,6 +30,8 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
 from app.repositories.app_settings_repository import AppSettingsRepository
 from app.services.referral_service import ReferralService
+
+logger = logging.getLogger(__name__)
 
 
 class AdminService:
@@ -390,29 +393,39 @@ class AdminService:
 
         key.status = VPNKeyStatus.ACTIVE
 
-        active_version = next((item for item in key.versions if item.is_active), None)
-        if active_version:
-            await self.threexui_service.extend_vpn_client(active_version, new_expiry)
-        else:
-            next_version = await self.key_repo.get_next_version(key.id)
-            created = await self.threexui_service.create_vpn_client(
-                user=user,
-                key=key,
-                subscription=current_subscription,
-                version_number=next_version,
-            )
-            self.session.add(
-                VPNKeyVersion(
-                    vpn_key_id=key.id,
-                    version=next_version,
-                    threexui_client_uuid=created.client_uuid,
-                    inbound_id=created.inbound_id,
-                    email_remark=created.email_remark,
-                    connection_uri=created.connection_uri,
-                    raw_config=created.raw,
-                    is_active=True,
+        # Async-safe: fetch active version via repository instead of lazy relationship access.
+        active_version = await self.key_repo.get_active_version(key.id)
+        try:
+            if active_version:
+                refreshed_uri = await self.threexui_service.extend_vpn_client(active_version, new_expiry)
+                if refreshed_uri:
+                    active_version.connection_uri = refreshed_uri
+            else:
+                next_version = await self.key_repo.get_next_version(key.id)
+                created = await self.threexui_service.create_vpn_client(
+                    user=user,
+                    key=key,
+                    subscription=current_subscription,
+                    version_number=next_version,
                 )
-            )
+                self.session.add(
+                    VPNKeyVersion(
+                        vpn_key_id=key.id,
+                        version=next_version,
+                        threexui_client_uuid=created.client_uuid,
+                        inbound_id=created.inbound_id,
+                        email_remark=created.email_remark,
+                        connection_uri=created.connection_uri,
+                        raw_config=created.raw,
+                        is_active=True,
+                    )
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('Admin grant subscription failed in 3x-ui integration: user_id=%s key_id=%s', user_id, key.id)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail='Не удалось выдать доступ в 3x-ui. Проверьте доступность панели и настройки.',
+            ) from exc
 
         await self.session.commit()
         return key

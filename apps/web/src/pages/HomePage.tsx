@@ -27,7 +27,7 @@ export function HomePage() {
     <section className="stack">
       <PageHeader title="Кабинет" subtitle="Управляйте VPN-подписками в одном месте" />
 
-      <article className="hero-card">
+      <article className="hero-card welcome-enter">
         <div className="profile-row">
           {avatar ? (
             <img className="profile-avatar" src={avatar} alt="Аватар" />
@@ -39,9 +39,9 @@ export function HomePage() {
             <p className="profile-username">{username ? `@${username}` : 'Telegram клиент'}</p>
           </div>
         </div>
-        <p className="hero-label">Добро пожаловать</p>
-        <p className="hero-title">Ваш VPN-центр управления</p>
-        <p className="hero-subtitle">Ключи, платежи и рефералы в одном интерфейсе.</p>
+        <p className="hero-label greeting-chip">Добро пожаловать</p>
+        <p className="hero-title welcome-line-1">Ваш VPN-центр управления</p>
+        <p className="hero-subtitle welcome-line-2">Ключи, платежи и рефералы в одном интерфейсе.</p>
       </article>
 
       <div className="stat-grid">
