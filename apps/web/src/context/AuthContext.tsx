@@ -37,6 +37,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSystemStatus(data);
   };
 
+  const refreshSystemStatusSafe = async () => {
+    try {
+      await refreshSystemStatus();
+    } catch (err) {
+      console.info('[auth] system status skipped', {
+        reason: err instanceof Error ? err.message : 'unknown_error',
+      });
+      setSystemStatus(null);
+    }
+  };
+
   useEffect(() => {
     if (bootstrapStartedRef.current) {
       console.info('[auth] bootstrap skipped', {
@@ -86,7 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
-        await Promise.all([refreshMe(), refreshSystemStatus()]);
+        await refreshMe();
+        await refreshSystemStatusSafe();
         setError(null);
       } catch (err) {
         clearAccessToken();
