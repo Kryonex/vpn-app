@@ -8,10 +8,13 @@ export type TGUser = {
 
 export type TGWebApp = {
   initData: string;
+  colorScheme?: 'light' | 'dark';
   initDataUnsafe?: {
     user?: TGUser;
     [key: string]: unknown;
   };
+  onEvent?: (event: 'themeChanged', handler: () => void) => void;
+  offEvent?: (event: 'themeChanged', handler: () => void) => void;
   ready: () => void;
   expand: () => void;
   close: () => void;
@@ -25,6 +28,8 @@ declare global {
     };
   }
 }
+
+let themeListenersBound = false;
 
 export function initTelegramSDK(): TGWebApp | null {
   // The SDK package is intentionally kept to align with official Mini Apps tooling.
@@ -46,5 +51,35 @@ export function initTelegramSDK(): TGWebApp | null {
     webApp.ready();
     webApp.expand();
   }
+
+  const applyTheme = () => {
+    const mediaQuery = typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)')
+      : null;
+    const prefersDark = Boolean(mediaQuery?.matches);
+    const scheme = webApp?.colorScheme === 'dark' || webApp?.colorScheme === 'light'
+      ? webApp.colorScheme
+      : prefersDark
+        ? 'dark'
+        : 'light';
+    const root = document.documentElement;
+    root.dataset.theme = scheme;
+    root.style.colorScheme = scheme;
+  };
+
+  applyTheme();
+  if (!themeListenersBound) {
+    webApp?.onEvent?.('themeChanged', applyTheme);
+    const mediaQuery = typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)')
+      : null;
+    if (mediaQuery?.addEventListener) {
+      mediaQuery.addEventListener('change', applyTheme);
+    } else {
+      mediaQuery?.addListener?.(applyTheme);
+    }
+    themeListenersBound = true;
+  }
+
   return webApp;
 }

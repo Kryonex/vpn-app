@@ -8,9 +8,9 @@ const navItems: Array<{ to: string; label: string; icon: ComponentType<{ size?: 
   { to: '/', label: 'Главная', icon: Home },
   { to: '/keys', label: 'Ключи', icon: KeyRound },
   { to: '/buy', label: 'Купить', icon: CircleDollarSign },
-  { to: '/payments', label: 'Платежи', icon: ReceiptText },
+  { to: '/payments', label: 'Оплаты', icon: ReceiptText },
   { to: '/referrals', label: 'Рефералы', icon: Users },
-  { to: '/support', label: 'Поддержка', icon: HelpCircle },
+  { to: '/support', label: 'Помощь', icon: HelpCircle },
   { to: '/admin', label: 'Админ', icon: Shield, adminOnly: true },
 ];
 
@@ -23,7 +23,9 @@ export function BottomNav() {
     <nav className="bottom-nav">
       {visibleItems.map((item) => {
         const Icon = item.icon;
-        const active = location.pathname === item.to;
+        const active = item.to === '/'
+          ? location.pathname === '/'
+          : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
         return (
           <Link
             key={item.to}
