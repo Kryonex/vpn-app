@@ -17,6 +17,7 @@ from app.models.enums import PaymentStatus, SubscriptionStatus, VPNKeyStatus
 from app.models.payment import Payment
 from app.models.payment_event import PaymentEvent
 from app.models.plan import Plan
+from app.models.referral import Referral
 from app.models.referral_reward import ReferralReward
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -48,13 +49,34 @@ class AdminService:
         self.app_settings_repo = AppSettingsRepository(session)
 
     async def list_users(self, limit: int = 100, offset: int = 0):
-        return await self.user_repo.list_users(limit=limit, offset=offset)
+        users = await self.user_repo.list_users(limit=limit, offset=offset)
+        items: list[dict[str, object]] = []
+        for user in users:
+            account = user.telegram_account
+            items.append(
+                {
+                    'id': user.id,
+                    'referral_code': user.referral_code,
+                    'bonus_days_balance': user.bonus_days_balance,
+                    'created_at': user.created_at,
+                    'telegram_username': account.username if account else None,
+                    'telegram_user_id': account.telegram_user_id if account else None,
+                    'total_keys_count': len(user.vpn_keys),
+                }
+            )
+        return items
 
     async def list_payments(self, limit: int = 100, offset: int = 0) -> list[Payment]:
         return await self.payment_repo.list_all(limit=limit, offset=offset)
 
     async def list_keys(self, limit: int = 100, offset: int = 0) -> list[VPNKey]:
-        stmt = select(VPNKey).order_by(VPNKey.created_at.desc()).offset(offset).limit(limit)
+        stmt = (
+            select(VPNKey)
+            .options(selectinload(VPNKey.owner).selectinload(User.telegram_account), selectinload(VPNKey.current_subscription))
+            .order_by(VPNKey.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
         result = await self.session.scalars(stmt)
         return result.all()
 
@@ -438,6 +460,36 @@ class AdminService:
 
         await self.session.commit()
         return key
+
+    async def delete_key_from_history(self, key_id: UUID, reason: str) -> dict[str, str | bool]:
+        key = await self.session.scalar(
+            select(VPNKey)
+            .where(VPNKey.id == key_id)
+            .options(selectinload(VPNKey.versions), selectinload(VPNKey.current_subscription))
+        )
+        if not key:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Key not found')
+
+        active_version = next((item for item in key.versions if item.is_active), None)
+        if active_version:
+            try:
+                await self.threexui_service.revoke_vpn_client(active_version)
+            except Exception:  # noqa: BLE001
+                logger.warning('Admin delete key: failed to revoke panel client for key %s', key_id)
+
+        audit = AuditLog(
+            actor_type='admin',
+            actor_id=None,
+            action='admin_delete_key',
+            entity_type='vpn_key',
+            entity_id=str(key.id),
+            metadata_json={'reason': reason[:255]},
+        )
+        self.session.add(audit)
+        await self.session.flush()
+        await self.session.delete(key)
+        await self.session.commit()
+        return {'ok': True, 'key_id': str(key_id)}
 
     async def add_bonus_days(self, user_id: UUID, days: int, reason: str) -> None:
         await self.referral_service.adjust_bonus_days(user_id=user_id, days_delta=days, reason=reason)

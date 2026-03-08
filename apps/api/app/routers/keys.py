@@ -18,6 +18,7 @@ from app.schemas.payment import PaymentIntentOut
 from app.services.key_service import KeyService
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
+from app.services.system_service import SystemStatusService
 
 router = APIRouter(prefix='/keys', tags=['keys'])
 settings = get_settings()
@@ -52,6 +53,7 @@ async def purchase_key(
     redis: Redis = Depends(redis_dependency),
     threexui_service: ThreeXUIService = Depends(threexui_dependency),
 ) -> PaymentIntentOut:
+    await SystemStatusService(session).ensure_user_operation_allowed(current_user)
     service = PaymentService(
         session=session,
         threexui_service=threexui_service,
@@ -82,6 +84,7 @@ async def renew_key(
     redis: Redis = Depends(redis_dependency),
     threexui_service: ThreeXUIService = Depends(threexui_dependency),
 ) -> PaymentIntentOut:
+    await SystemStatusService(session).ensure_user_operation_allowed(current_user)
     service = PaymentService(
         session=session,
         threexui_service=threexui_service,
@@ -110,6 +113,18 @@ async def rotate_key(
     session: AsyncSession = Depends(get_session),
     threexui_service: ThreeXUIService = Depends(threexui_dependency),
 ) -> RotateResponse:
+    await SystemStatusService(session).ensure_user_operation_allowed(current_user)
     service = KeyService(session, threexui_service)
     version = await service.rotate_key(current_user.id, key_id)
     return RotateResponse(key_id=version.vpn_key_id, new_version=version.version, connection_uri=version.connection_uri)
+
+
+@router.delete('/{key_id}', dependencies=[Depends(rate_limit)])
+async def delete_key(
+    key_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = KeyService(session, threexui_service)
+    return await service.delete_user_key(current_user.id, key_id)

@@ -2,7 +2,7 @@
 
 import { apiRequest, toJsonBody } from '../api/client';
 import { initTelegramSDK, type TGUser } from '../telegram';
-import type { MeResponse } from '../types/models';
+import type { MeResponse, SystemStatus } from '../types/models';
 
 type AuthState = {
   isLoading: boolean;
@@ -10,8 +10,10 @@ type AuthState = {
   isAdmin: boolean;
   telegramProfile: TGUser | null;
   me: MeResponse | null;
+  systemStatus: SystemStatus | null;
   error: string | null;
   refreshMe: () => Promise<void>;
+  refreshSystemStatus: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -20,11 +22,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [telegramProfile, setTelegramProfile] = useState<TGUser | null>(null);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshMe = async () => {
     const data = await apiRequest<MeResponse>('/me');
     setMe(data);
+  };
+
+  const refreshSystemStatus = async () => {
+    const data = await apiRequest<SystemStatus>('/system/status');
+    setSystemStatus(data);
   };
 
   useEffect(() => {
@@ -53,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('session_token', token);
         }
 
-        await refreshMe();
+        await Promise.all([refreshMe(), refreshSystemStatus()]);
         setError(null);
       } catch (err) {
         localStorage.removeItem('session_token');
@@ -77,10 +85,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         me?.telegram?.telegram_user_id === Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0),
       telegramProfile,
       me,
+      systemStatus,
       error,
       refreshMe,
+      refreshSystemStatus,
     }),
-    [isLoading, me, error, telegramProfile],
+    [isLoading, me, systemStatus, error, telegramProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

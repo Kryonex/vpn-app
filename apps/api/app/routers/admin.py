@@ -15,6 +15,7 @@ from app.schemas.admin import (
     AdminBonusDaysRequest,
     AdminBindPanelKeyRequest,
     AdminBindPanelKeyResponse,
+    AdminDeleteKeyRequest,
     AdminGrantSubscriptionRequest,
     AdminKeyOut,
     AdminPaymentDecisionRequest,
@@ -32,9 +33,11 @@ from app.schemas.admin import (
     AdminSubscriptionOut,
     AdminUserOut,
 )
+from app.schemas.system import AdminMessageSendRequest, AdminMessageSendResponse, AdminSystemStatusUpdateRequest, SystemStatusOut
 from app.services.admin_service import AdminService
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
+from app.services.system_service import SystemStatusService
 
 router = APIRouter(prefix='/admin', tags=['admin'], dependencies=[Depends(require_admin)])
 
@@ -204,6 +207,66 @@ async def admin_sync_panel(
     return {'ok': True, **stats}
 
 
+@router.get('/system/status', response_model=SystemStatusOut)
+async def admin_get_system_status(
+    session: AsyncSession = Depends(get_session),
+):
+    state = await SystemStatusService(session).get_status()
+    return SystemStatusOut(**state.__dict__)
+
+
+@router.patch('/system/status', response_model=SystemStatusOut)
+async def admin_update_system_status(
+    payload: AdminSystemStatusUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(redis_dependency),
+):
+    system_service = SystemStatusService(session)
+    state = await system_service.set_status(
+        status_value=payload.status,
+        message=payload.message,
+        maintenance_mode=payload.maintenance_mode,
+        show_to_all=payload.show_to_all,
+        scheduled_for=payload.scheduled_for,
+    )
+    if payload.send_notification_to_all and payload.message:
+        notifier = NotificationService(redis)
+        await system_service.send_admin_message(
+            actor_id='system_status',
+            message=payload.message,
+            send_to_all=True,
+            force=False,
+            enqueue_fn=notifier.enqueue_telegram_notification,
+        )
+    await session.commit()
+    return SystemStatusOut(**state.__dict__)
+
+
+@router.post('/messages/send', response_model=AdminMessageSendResponse)
+async def admin_send_message(
+    payload: AdminMessageSendRequest,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(redis_dependency),
+):
+    notifier = NotificationService(redis)
+    system_service = SystemStatusService(session)
+    target_count, duplicate_blocked, audit_log_id = await system_service.send_admin_message(
+        actor_id='admin',
+        message=payload.message,
+        send_to_all=payload.send_to_all,
+        force=payload.force,
+        user_id=payload.user_id,
+        enqueue_fn=notifier.enqueue_telegram_notification,
+    )
+    await session.commit()
+    return AdminMessageSendResponse(
+        ok=True,
+        target_count=target_count,
+        duplicate_blocked=duplicate_blocked,
+        audit_log_id=audit_log_id,
+    )
+
+
 @router.post('/keys/bind-by-username', response_model=AdminBindPanelKeyResponse)
 async def admin_bind_panel_key_by_username(
     payload: AdminBindPanelKeyRequest,
@@ -272,6 +335,17 @@ async def admin_revoke_key(
 ):
     service = AdminService(session, threexui_service)
     return await service.revoke_key(key_id=key_id, reason=payload.reason)
+
+
+@router.delete('/keys/{key_id}')
+async def admin_delete_key(
+    key_id: UUID,
+    payload: AdminDeleteKeyRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return await service.delete_key_from_history(key_id=key_id, reason=payload.reason)
 
 
 @router.post('/users/{user_id}/bonus-days')

@@ -3,6 +3,7 @@ from app.schemas.admin import (
     AdminBindPanelKeyRequest,
     AdminBindPanelKeyResponse,
     AdminGrantSubscriptionRequest,
+    AdminDeleteKeyRequest,
     AdminKeyOut,
     AdminPaymentDecisionRequest,
     AdminPaymentsListResponse,
@@ -25,6 +26,7 @@ from app.schemas.payment import PaymentIntentOut, PaymentOut
 from app.schemas.plan import PlanOut
 from app.schemas.referral import ReferralMeOut
 from app.schemas.support import SupportContactOut
+from app.schemas.system import AdminMessageSendRequest, AdminMessageSendResponse, AdminSystemStatusUpdateRequest, SystemStatusOut
 from app.schemas.user import MeResponse, TelegramAccountOut
 
 __all__ = [
@@ -44,6 +46,7 @@ __all__ = [
     'AdminBonusDaysRequest',
     'AdminBindPanelKeyRequest',
     'AdminBindPanelKeyResponse',
+    'AdminDeleteKeyRequest',
     'AdminGrantSubscriptionRequest',
     'AdminKeyOut',
     'AdminPaymentDecisionRequest',
@@ -61,4 +64,8 @@ __all__ = [
     'AdminUserLookupOut',
     'AdminUserOut',
     'SupportContactOut',
+    'SystemStatusOut',
+    'AdminSystemStatusUpdateRequest',
+    'AdminMessageSendRequest',
+    'AdminMessageSendResponse',
 ]

@@ -1,17 +1,21 @@
-﻿import { KeyRound, RefreshCw } from 'lucide-react';
+import { Copy, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { apiRequest } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
-import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
+import { EmptyState, ErrorState, SkeletonCards } from '../components/StateCards';
 import { StatusBadge } from '../components/StatusBadge';
+import { SystemStatusBanner } from '../components/SystemStatusBanner';
+import { useAuth } from '../context/AuthContext';
 import type { VPNKey } from '../types/models';
 
 export function KeysPage() {
+  const { systemStatus } = useAuth();
   const [keys, setKeys] = useState<VPNKey[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     apiRequest<VPNKey[]>('/keys')
@@ -20,40 +24,91 @@ export function KeysPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const copyUri = async (key: VPNKey) => {
+    const uri = key.active_version?.connection_uri;
+    if (!uri) {
+      return;
+    }
+    await navigator.clipboard.writeText(uri);
+    setMessage(`URL подключения для ключа «${key.display_name}» скопирован.`);
+  };
+
+  const removeKey = async (keyId: string) => {
+    if (!window.confirm('Удалить нерабочий ключ из истории?')) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/keys/${keyId}`, { method: 'DELETE' });
+      setKeys((prev) => prev.filter((item) => item.id !== keyId));
+      setMessage('Ключ удалён из истории.');
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить ключ');
+    }
+  };
+
   return (
     <section className="stack">
-      <PageHeader title="Мои ключи" subtitle="Статус, срок действия и действия по каждому ключу" />
+      <PageHeader title="Мои ключи" subtitle="Все активные и архивные ключи с быстрыми действиями" />
+      <SystemStatusBanner status={systemStatus} compact />
 
-      {loading && <LoadingState text="Загружаем ключи..." />}
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorState text={error} />}
       {!loading && !error && keys.length === 0 && (
         <EmptyState title="Ключей пока нет" text="Купите первый тариф, чтобы создать VPN-ключ." />
       )}
 
-      {!loading && !error && keys.map((key) => (
-        <article key={key.id} className="glass-card key-card">
-          <div className="row-between">
-            <p className="title-line">{key.display_name}</p>
-            <StatusBadge status={key.status} />
-          </div>
-          <p className="muted">
-            Срок действия: {key.current_subscription
-              ? new Date(key.current_subscription.expires_at).toLocaleDateString()
-              : 'нет данных'}
-          </p>
-          {key.status === 'revoked' && !key.active_version && (
-            <p className="muted">Клиент удален/отозван в панели 3x-ui. Для доступа перевыпустите ключ.</p>
-          )}
-          <div className="action-row">
-            <Link className="btn btn-primary" to={`/keys/${key.id}`}>
-              <KeyRound size={16} /> Подробнее
-            </Link>
-            <Link className="btn btn-ghost" to={`/keys/${key.id}/renew`}>
-              <RefreshCw size={16} /> Продлить
-            </Link>
-          </div>
-        </article>
-      ))}
+      {!loading &&
+        !error &&
+        keys.map((key) => (
+          <article key={key.id} className="glass-card key-card">
+            <div className="row-between">
+              <div>
+                <p className="title-line">{key.display_name}</p>
+                <p className="muted">
+                  {key.current_subscription
+                    ? `Действует до ${new Date(key.current_subscription.expires_at).toLocaleDateString()}`
+                    : 'Нет активной подписки'}
+                </p>
+              </div>
+              <StatusBadge status={key.status} />
+            </div>
+
+            {key.active_version?.connection_uri ? (
+              <p className="mono-block">{key.active_version.connection_uri}</p>
+            ) : (
+              <p className="muted">
+                {key.status === 'revoked'
+                  ? 'Клиент удалён или отключён в панели 3x-ui. Такой ключ можно удалить из истории.'
+                  : 'У этого ключа пока нет доступного URL подключения.'}
+              </p>
+            )}
+
+            <div className="action-row">
+              <Link className="btn btn-primary" to={`/keys/${key.id}`}>
+                <KeyRound size={16} /> Открыть
+              </Link>
+              <button
+                className="btn btn-ghost"
+                onClick={() => void copyUri(key)}
+                disabled={!key.active_version?.connection_uri}
+              >
+                <Copy size={16} /> Скопировать
+              </button>
+              <Link className="btn btn-ghost" to={`/keys/${key.id}/renew`}>
+                <RefreshCw size={16} /> Продлить
+              </Link>
+              {(key.status !== 'active' || !key.active_version) && (
+                <button className="btn btn-danger-soft" onClick={() => void removeKey(key.id)}>
+                  <Trash2 size={16} /> Удалить
+                </button>
+              )}
+            </div>
+          </article>
+        ))}
+
+      {message && <div className="toast-success">{message}</div>}
     </section>
   );
 }

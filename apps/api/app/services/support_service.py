@@ -19,7 +19,7 @@ class SupportService:
             return SupportContactOut(
                 telegram_admin_id=None,
                 username=None,
-                display_tag='Поддержка временно недоступна',
+                display_tag='Support unavailable',
                 telegram_link=None,
             )
 

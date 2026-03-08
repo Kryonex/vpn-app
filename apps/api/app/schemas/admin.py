@@ -16,6 +16,9 @@ class AdminUserOut(BaseSchema):
     referral_code: str
     bonus_days_balance: int
     created_at: datetime
+    telegram_username: str | None = None
+    telegram_user_id: int | None = None
+    total_keys_count: int = 0
 
 
 class AdminKeyOut(BaseSchema):
@@ -132,4 +135,8 @@ class AdminBindPanelKeyResponse(BaseModel):
     version_id: UUID
     owner_id: UUID
     connection_uri: str | None
+
+
+class AdminDeleteKeyRequest(BaseModel):
+    reason: str = Field(default='delete_from_history', min_length=3, max_length=255)
 

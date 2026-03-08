@@ -69,6 +69,15 @@ export type MeResponse = {
   } | null;
 };
 
+export type SystemStatus = {
+  status: 'online' | 'degraded' | 'maintenance' | 'panel_unavailable' | 'server_unavailable';
+  message: string | null;
+  maintenance_mode: boolean;
+  show_to_all: boolean;
+  scheduled_for: string | null;
+  updated_at: string | null;
+};
+
 export type ReferralMe = {
   referral_code: string;
   referral_link: string;

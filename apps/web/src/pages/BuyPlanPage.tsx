@@ -3,10 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { apiRequest, toJsonBody } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
-import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
+import { EmptyState, ErrorState, SkeletonCards } from '../components/StateCards';
+import { SystemStatusBanner } from '../components/SystemStatusBanner';
+import { useAuth } from '../context/AuthContext';
 import type { PaymentIntent, Plan } from '../types/models';
 
 export function BuyPlanPage() {
+  const { systemStatus } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,25 +40,24 @@ export function BuyPlanPage() {
       );
       setTransferPhone(payment.transfer_phone);
       setTransferNote(payment.transfer_note);
-      setMessage('Заявка создана. Выполните перевод по номеру ниже и отправьте чек администратору.');
+      setMessage('Заявка создана. Выполните перевод по реквизитам ниже и отправьте чек администратору.');
       setShowPurchaseSuccess(true);
       if (successTimerRef.current) {
         window.clearTimeout(successTimerRef.current);
       }
-      successTimerRef.current = window.setTimeout(() => {
-        setShowPurchaseSuccess(false);
-      }, 2600);
+      successTimerRef.current = window.setTimeout(() => setShowPurchaseSuccess(false), 2600);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать платеж');
+      setError(err instanceof Error ? err.message : 'Не удалось создать заявку на оплату');
     }
   };
 
   return (
     <section className="stack">
-      <PageHeader title="Покупка тарифа" subtitle="Выберите срок и создайте заявку на оплату" />
+      <PageHeader title="Покупка тарифа" subtitle="Выберите срок подписки и создайте заявку на оплату" />
+      <SystemStatusBanner status={systemStatus} compact />
 
-      {loading && <LoadingState text="Загружаем тарифы..." />}
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorState text={error} />}
       {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов нет" text="Попробуйте позже." />}
 
@@ -66,7 +68,7 @@ export function BuyPlanPage() {
             <CheckCircle2 size={28} className="purchase-check-icon" />
           </div>
           <p className="title-line">Заявка отправлена</p>
-          <p className="muted">Реквизиты для перевода уже готовы ниже.</p>
+          <p className="muted">Реквизиты уже готовы ниже. После оплаты отправьте подтверждение администратору.</p>
         </article>
       )}
 
@@ -76,7 +78,7 @@ export function BuyPlanPage() {
           <p className="muted">
             Номер для перевода: <strong>{transferPhone}</strong>
           </p>
-          <p className="muted">Комментарий к переводу:</p>
+          <p className="muted">Комментарий к переводу</p>
           <p className="mono-block">{transferNote || 'VPN оплата'}</p>
           <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(transferPhone)}>
             <Copy size={16} /> Скопировать номер
@@ -84,20 +86,28 @@ export function BuyPlanPage() {
         </article>
       )}
 
-      {!loading && !error && plans.map((plan) => (
-        <article key={plan.id} className="glass-card plan-card">
-          <div className="row-between">
-            <p className="title-line">{plan.name}</p>
-            <p className="price-line">
-              {plan.price} {plan.currency}
-            </p>
-          </div>
-          <p className="muted">Длительность: {plan.duration_days} дней</p>
-          <button className="btn btn-primary" onClick={() => void buy(plan.id)}>
-            <CircleDollarSign size={16} /> Создать заявку
-          </button>
-        </article>
-      ))}
+      {!loading &&
+        !error &&
+        plans.map((plan) => (
+          <article key={plan.id} className="glass-card plan-card">
+            <div className="row-between">
+              <div>
+                <p className="title-line">{plan.name}</p>
+                <p className="muted">{plan.duration_days} дней доступа</p>
+              </div>
+              <p className="price-line">
+                {plan.price} {plan.currency}
+              </p>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => void buy(plan.id)}
+              disabled={Boolean(systemStatus?.maintenance_mode)}
+            >
+              <CircleDollarSign size={16} /> Создать заявку
+            </button>
+          </article>
+        ))}
 
       {message && <div className="toast-success">{message}</div>}
     </section>

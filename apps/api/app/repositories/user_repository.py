@@ -99,7 +99,13 @@ class UserRepository:
         return account
 
     async def list_users(self, limit: int = 100, offset: int = 0) -> Sequence[User]:
-        stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
+        stmt = (
+            select(User)
+            .options(selectinload(User.telegram_account), selectinload(User.vpn_keys))
+            .order_by(User.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
         result = await self.session.scalars(stmt)
         return result.all()
 

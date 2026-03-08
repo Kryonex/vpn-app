@@ -5,9 +5,12 @@ import { useParams } from 'react-router-dom';
 import { apiRequest, toJsonBody } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
+import { SystemStatusBanner } from '../components/SystemStatusBanner';
+import { useAuth } from '../context/AuthContext';
 import type { PaymentIntent, Plan } from '../types/models';
 
 export function RenewKeyPage() {
+  const { systemStatus } = useAuth();
   const { keyId } = useParams<{ keyId: string }>();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [bonusDays, setBonusDays] = useState(0);
@@ -43,6 +46,7 @@ export function RenewKeyPage() {
   return (
     <section className="stack">
       <PageHeader title="Продление ключа" subtitle="Продлите текущий ключ без перевыпуска" />
+      <SystemStatusBanner status={systemStatus} compact />
 
       <article className="glass-card">
         <label className="muted" htmlFor="bonus-days">Бонусных дней применить</label>
@@ -82,7 +86,11 @@ export function RenewKeyPage() {
             <p className="price-line">{plan.price} {plan.currency}</p>
           </div>
           <p className="muted">Длительность: {plan.duration_days} дней</p>
-          <button className="btn btn-primary" onClick={() => renew(plan.id)}>
+          <button
+            className="btn btn-primary"
+            onClick={() => renew(plan.id)}
+            disabled={Boolean(systemStatus?.maintenance_mode)}
+          >
             <CircleDollarSign size={16} /> Создать заявку на продление
           </button>
         </article>

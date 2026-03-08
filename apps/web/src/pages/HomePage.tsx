@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/StateCards';
+import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
 
 export function HomePage() {
-  const { me, telegramProfile } = useAuth();
+  const { me, telegramProfile, systemStatus } = useAuth();
 
   if (!me) {
     return <EmptyState title="Нет данных профиля" text="Переоткройте Mini App." />;
@@ -26,6 +27,7 @@ export function HomePage() {
   return (
     <section className="stack">
       <PageHeader title="Кабинет" subtitle="Управляйте VPN-подписками в одном месте" />
+      <SystemStatusBanner status={systemStatus} />
 
       <article className="hero-card welcome-enter">
         <div className="profile-row">
@@ -75,6 +77,13 @@ export function HomePage() {
           <KeyRound size={16} /> Мои ключи
         </Link>
       </div>
+
+      {systemStatus?.maintenance_mode && (
+        <article className="glass-card">
+          <p className="title-line">Режим обслуживания</p>
+          <p className="muted">Операции с подписками могут быть временно ограничены. Статус системы отображается выше.</p>
+        </article>
+      )}
     </section>
   );
 }

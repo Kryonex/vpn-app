@@ -64,10 +64,7 @@ async def _process_subscriptions(notifier: NotificationService) -> None:
             if owner.telegram_account:
                 await notifier.enqueue_telegram_notification(
                     telegram_user_id=owner.telegram_account.telegram_user_id,
-                    text=(
-                        f'Подписка для ключа "{sub.vpn_key.display_name}" истекает '
-                        f'{sub.expires_at.date().isoformat()}.'
-                    ),
+                    text=f'Подписка для ключа "{sub.vpn_key.display_name}" истекает {sub.expires_at.date().isoformat()}.',
                 )
             sub.notified_expiring_at = now
 

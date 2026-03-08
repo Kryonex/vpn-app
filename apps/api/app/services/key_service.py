@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.enums import VPNKeyStatus
+from app.models.audit_log import AuditLog
 from app.models.vpn_key_version import VPNKeyVersion
 from app.repositories.vpn_key_repository import VPNKeyRepository
 
@@ -92,4 +93,37 @@ class KeyService:
         self.session.add(new_version)
         await self.session.commit()
         return new_version
+
+    async def delete_user_key(self, user_id: UUID, key_id: UUID) -> dict[str, str | bool]:
+        key = await self.repo.get_owned_key(key_id, user_id)
+        if not key:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Key not found')
+
+        if key.status == VPNKeyStatus.ACTIVE and any(item.is_active for item in key.versions):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Active key cannot be deleted. Revoke or rotate it first.',
+            )
+
+        active_version = next((item for item in key.versions if item.is_active), None)
+        if active_version:
+            try:
+                await self.threexui_service.revoke_vpn_client(active_version)
+            except Exception:  # noqa: BLE001
+                pass
+
+        self.session.add(
+            AuditLog(
+                actor_type='user',
+                actor_id=str(user_id),
+                action='user_delete_key',
+                entity_type='vpn_key',
+                entity_id=str(key_id),
+                metadata_json=None,
+            )
+        )
+        await self.session.flush()
+        await self.session.delete(key)
+        await self.session.commit()
+        return {'ok': True, 'key_id': str(key_id)}
 
