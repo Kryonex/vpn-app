@@ -2,31 +2,37 @@ function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-let accessTokenCache: string | null = null;
-
-function safeGetStorage(key: string): string | null {
+function safeGetToken(): string | null {
   try {
-    return localStorage.getItem(key) || sessionStorage.getItem(key);
+    const token = localStorage.getItem('session_token');
+    const normalized = token?.trim() || null;
+    console.info('[auth] access token restored', {
+      restored: Boolean(normalized),
+    });
+    return normalized;
   } catch {
+    console.info('[auth] access token restored', {
+      restored: false,
+    });
     return null;
   }
 }
 
-function safeSetStorage(key: string, value: string): void {
+function safeSetToken(token: string): void {
   try {
-    localStorage.setItem(key, value);
-    sessionStorage.setItem(key, value);
-  } catch {
-    // Ignore storage issues in restricted Telegram webviews.
+    localStorage.setItem('session_token', token.trim());
+  } finally {
+    console.info('[auth] access token stored', {
+      stored: Boolean(token.trim()),
+    });
   }
 }
 
-function safeRemoveStorage(key: string): void {
+function safeClearToken(): void {
   try {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  } catch {
-    // Ignore storage issues in restricted Telegram webviews.
+    localStorage.removeItem('session_token');
+  } finally {
+    console.info('[auth] access token cleared');
   }
 }
 
@@ -50,33 +56,18 @@ export function getApiBase() {
 }
 
 export function getAccessToken(): string | null {
-  if (accessTokenCache) {
-    return accessTokenCache;
-  }
-  const stored = safeGetStorage('session_token');
-  accessTokenCache = stored?.trim() || null;
-  console.info('[auth] access token restored', {
-    restored: Boolean(accessTokenCache),
-  });
-  return accessTokenCache;
+  return safeGetToken();
 }
 
 export function setAccessToken(token: string): void {
-  accessTokenCache = token.trim();
-  safeSetStorage('session_token', accessTokenCache);
-  console.info('[auth] access token stored', {
-    stored: Boolean(accessTokenCache),
-  });
+  safeSetToken(token);
 }
 
 export function clearAccessToken(): void {
-  accessTokenCache = null;
-  safeRemoveStorage('session_token');
-  console.info('[auth] access token cleared');
+  safeClearToken();
 }
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const isAdminPath = path.startsWith('/admin');
   const token = getAccessToken();
   const requestUrl = `${API_BASE}${path}`;
 
@@ -88,7 +79,6 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
 
   console.info('[api] request', {
     path,
-    isAdminPath,
     hasAuthToken: Boolean(token),
   });
 

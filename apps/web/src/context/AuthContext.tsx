@@ -77,7 +77,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.info('[auth] access token already available', {
             available: Boolean(token),
           });
-          setAccessToken(token);
         }
 
         await Promise.all([refreshMe(), refreshSystemStatus()]);
