@@ -62,6 +62,14 @@ export function HomePage() {
     setShowOnboarding(shouldShow);
   }, [me]);
 
+  useEffect(() => {
+    const modalOpen = helpOpen || showOnboarding;
+    document.body.classList.toggle('modal-open', modalOpen);
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [helpOpen, showOnboarding]);
+
   if (!me) {
     return <EmptyState title="Не удалось загрузить кабинет" text="Попробуйте заново открыть мини-приложение." />;
   }
