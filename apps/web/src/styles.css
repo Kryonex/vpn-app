@@ -889,6 +889,15 @@ details[open] .foldable-arrow {
   animation: spin 1s linear infinite;
 }
 
+.news-image {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 18px;
+  margin: 8px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 @media (min-width: 700px) {
   .container {
     padding-inline: 18px;

@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, SkeletonCards } from '../components/StateCards'
 import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
-import type { VPNKey } from '../types/models';
+import type { TelegramProxyAccess, VPNKey } from '../types/models';
 
 export function KeysPage() {
   const { systemStatus } = useAuth();
@@ -16,12 +16,14 @@ export function KeysPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [proxyAccess, setProxyAccess] = useState<TelegramProxyAccess | null>(null);
 
   useEffect(() => {
     apiRequest<VPNKey[]>('/keys')
       .then(setKeys)
       .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить ключи'))
       .finally(() => setLoading(false));
+    apiRequest<TelegramProxyAccess>('/system/telegram-proxy').then(setProxyAccess).catch(() => null);
   }, []);
 
   const copyUri = async (key: VPNKey) => {
@@ -89,6 +91,11 @@ export function KeysPage() {
               <Link className="btn btn-primary" to={`/keys/${key.id}`}>
                 <KeyRound size={16} /> Открыть
               </Link>
+              {proxyAccess?.enabled && key.status === 'active' && (
+                <a className="btn btn-ghost" href={proxyAccess.proxy_url ?? undefined}>
+                  <KeyRound size={16} /> {proxyAccess.button_text}
+                </a>
+              )}
               <button className="btn btn-ghost" onClick={() => void copyUri(key)} disabled={!key.active_version?.connection_uri}>
                 <Copy size={16} /> Скопировать
               </button>

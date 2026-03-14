@@ -9,7 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
-import type { VPNKey } from '../types/models';
+import type { TelegramProxyAccess, VPNKey } from '../types/models';
 
 const connectionGuide = [
   'Нажмите «Добавить в Happ», если приложение установлено и поддерживает открытие ссылок подключения.',
@@ -27,6 +27,7 @@ export function KeyDetailsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [proxyAccess, setProxyAccess] = useState<TelegramProxyAccess | null>(null);
 
   useEffect(() => {
     if (!keyId) {
@@ -37,6 +38,7 @@ export function KeyDetailsPage() {
       .then(setKeyData)
       .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить ключ'))
       .finally(() => setLoading(false));
+    apiRequest<TelegramProxyAccess>('/system/telegram-proxy').then(setProxyAccess).catch(() => null);
   }, [keyId]);
 
   const copyUri = async () => {
@@ -131,6 +133,11 @@ export function KeyDetailsPage() {
               <button className="btn btn-ghost" onClick={copyUri}>
                 <Copy size={16} /> Скопировать
               </button>
+              {proxyAccess?.enabled && keyData.status === 'active' && (
+                <a className="btn btn-ghost" href={proxyAccess.proxy_url ?? undefined}>
+                  <ExternalLink size={16} /> {proxyAccess.button_text}
+                </a>
+              )}
               <button className="btn btn-ghost" onClick={rotate} disabled={rotating || Boolean(systemStatus?.maintenance_mode)}>
                 <RefreshCw size={16} className={rotating ? 'spin' : ''} /> Перевыпустить
               </button>

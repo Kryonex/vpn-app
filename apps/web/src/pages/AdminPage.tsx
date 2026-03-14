@@ -109,6 +109,8 @@ export function AdminPage() {
   const [forceSend, setForceSend] = useState(false);
   const [sendImageDataUrl, setSendImageDataUrl] = useState<string | null>(null);
   const [sendImageFilename, setSendImageFilename] = useState<string | null>(null);
+  const [publishAsNews, setPublishAsNews] = useState(false);
+  const [newsTitle, setNewsTitle] = useState('');
   const [statusValue, setStatusValue] = useState<SystemStatus['status']>('online');
   const [statusMessage, setStatusMessage] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -362,7 +364,14 @@ export function AdminPage() {
           <div className="toggle-list">
             <label className="toggle-row"><input type="checkbox" checked={sendToAll} onChange={(e) => setSendToAll(e.target.checked)} /><span>Отправить всем</span></label>
             <label className="toggle-row"><input type="checkbox" checked={forceSend} onChange={(e) => setForceSend(e.target.checked)} /><span>Игнорировать защиту от дублей</span></label>
+            <label className="toggle-row"><input type="checkbox" checked={publishAsNews} onChange={(e) => setPublishAsNews(e.target.checked)} /><span>Опубликовать как новость</span></label>
           </div>
+          {publishAsNews && (
+            <label className="field">
+              <span className="field-label">Заголовок новости</span>
+              <input className="input" value={newsTitle} onChange={(e) => setNewsTitle(e.target.value)} placeholder="Например: Новое обновление" />
+            </label>
+          )}
           <div className="input-grid">
             <button className="btn btn-primary" onClick={() => void run(async () => {
               const result = await apiRequest<MessageResult>('/admin/messages/send', {
@@ -374,12 +383,23 @@ export function AdminPage() {
                   force: forceSend,
                   image_data_url: sendImageDataUrl,
                   image_filename: sendImageFilename,
+                  publish_as_news: publishAsNews,
+                  news_title: publishAsNews ? newsTitle || null : null,
                 }),
               });
               setSendText('');
               setSendImageDataUrl(null);
               setSendImageFilename(null);
-              await afterAction(result.duplicate_blocked ? 'Похожая рассылка уже отправлялась недавно.' : `Сообщение поставлено в очередь для ${result.target_count} получателей.`);
+              setPublishAsNews(false);
+              setNewsTitle('');
+              const successText = publishAsNews
+                ? result.target_count > 0
+                  ? `Новость опубликована и поставлена в очередь для ${result.target_count} получателей.`
+                  : 'Новость опубликована в личном кабинете.'
+                : result.duplicate_blocked
+                  ? 'Похожая рассылка уже отправлялась недавно.'
+                  : `Сообщение поставлено в очередь для ${result.target_count} получателей.`;
+              await afterAction(successText);
             })}><BellRing size={16} /> Отправить</button>
             <button className="btn btn-ghost" onClick={() => { setSendImageDataUrl(null); setSendImageFilename(null); }}>
               Убрать фото

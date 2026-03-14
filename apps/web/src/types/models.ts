@@ -100,3 +100,21 @@ export type SupportContact = {
   display_tag: string;
   telegram_link: string | null;
 };
+
+export type TelegramProxyAccess = {
+  enabled: boolean;
+  proxy_url: string | null;
+  button_text: string;
+};
+
+export type NewsItem = {
+  id: string;
+  title: string;
+  body: string;
+  image_data_url: string | null;
+  created_at: string;
+};
+
+export type SystemNewsList = {
+  items: NewsItem[];
+};

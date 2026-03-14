@@ -39,6 +39,8 @@ class AdminMessageSendRequest(BaseModel):
     force: bool = False
     image_data_url: str | None = Field(default=None, max_length=8_000_000)
     image_filename: str | None = Field(default=None, max_length=255)
+    publish_as_news: bool = False
+    news_title: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode='after')
     def validate_payload(self) -> 'AdminMessageSendRequest':
@@ -75,3 +77,21 @@ class TelegramProxySettingsOut(BaseModel):
 class TelegramProxySettingsUpdateRequest(BaseModel):
     proxy_url: str | None = Field(default=None, max_length=2048)
     button_text: str = Field(default='Подключить прокси', max_length=64)
+
+
+class UserTelegramProxyOut(BaseModel):
+    enabled: bool = False
+    proxy_url: str | None = None
+    button_text: str = 'Подключить прокси'
+
+
+class NewsItemOut(BaseModel):
+    id: str
+    title: str
+    body: str
+    image_data_url: str | None = None
+    created_at: datetime
+
+
+class SystemNewsListOut(BaseModel):
+    items: list[NewsItemOut]

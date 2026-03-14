@@ -274,16 +274,28 @@ async def admin_send_message(
 ):
     notifier = NotificationService(redis)
     system_service = SystemStatusService(session)
-    target_count, duplicate_blocked, audit_log_id = await system_service.send_admin_message(
-        actor_id='admin',
-        message=payload.message,
-        send_to_all=payload.send_to_all,
-        force=payload.force,
-        user_id=payload.user_id,
-        image_data_url=payload.image_data_url,
-        image_filename=payload.image_filename,
-        enqueue_fn=notifier.enqueue_telegram_notification,
-    )
+    target_count = 0
+    duplicate_blocked = False
+    audit_log_id: str | None = None
+    if payload.send_to_all or payload.user_id:
+        target_count, duplicate_blocked, audit_log_id = await system_service.send_admin_message(
+            actor_id='admin',
+            message=payload.message,
+            send_to_all=payload.send_to_all,
+            force=payload.force,
+            user_id=payload.user_id,
+            image_data_url=payload.image_data_url,
+            image_filename=payload.image_filename,
+            enqueue_fn=notifier.enqueue_telegram_notification,
+        )
+    if payload.publish_as_news:
+        await system_service.publish_news(
+            title=payload.news_title,
+            body=payload.message,
+            image_data_url=payload.image_data_url,
+        )
+    if not payload.publish_as_news and not payload.send_to_all and not payload.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Target user is required')
     await session.commit()
     return AdminMessageSendResponse(
         ok=True,

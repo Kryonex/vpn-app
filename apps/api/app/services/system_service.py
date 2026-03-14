@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +16,8 @@ from app.core.config import get_settings
 from app.models.audit_log import AuditLog
 from app.models.telegram_account import TelegramAccount
 from app.models.user import User
+from app.models.vpn_key import VPNKey
+from app.models.enums import VPNKeyStatus
 from app.repositories.app_settings_repository import AppSettingsRepository
 
 
@@ -30,6 +33,9 @@ class SystemStatusState:
 
 class SystemStatusService:
     STATUS_KEY = 'system_status'
+    TELEGRAM_PROXY_URL_KEY = 'telegram_proxy_url'
+    TELEGRAM_PROXY_BUTTON_TEXT_KEY = 'telegram_proxy_button_text'
+    NEWS_KEY = 'system_news'
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -81,6 +87,97 @@ class SystemStatusService:
         await self.repo.set(self.STATUS_KEY, json.dumps(payload, ensure_ascii=False))
         await self.session.flush()
         return state
+
+    async def get_user_telegram_proxy(self, user: User) -> dict[str, object]:
+        active_keys_count = int(
+            (
+                await self.session.scalar(
+                    select(func.count(VPNKey.id)).where(
+                        VPNKey.owner_id == user.id,
+                        VPNKey.status == VPNKeyStatus.ACTIVE,
+                    )
+                )
+            )
+            or 0
+        )
+        if active_keys_count <= 0:
+            return {'enabled': False, 'proxy_url': None, 'button_text': 'Подключить прокси'}
+
+        proxy_url_setting = await self.repo.get(self.TELEGRAM_PROXY_URL_KEY)
+        button_text_setting = await self.repo.get(self.TELEGRAM_PROXY_BUTTON_TEXT_KEY)
+        proxy_url = proxy_url_setting.value.strip() if proxy_url_setting and proxy_url_setting.value.strip() else None
+        button_text = (
+            button_text_setting.value.strip()
+            if button_text_setting and button_text_setting.value.strip()
+            else 'Подключить прокси'
+        )
+        return {
+            'enabled': bool(proxy_url),
+            'proxy_url': proxy_url,
+            'button_text': button_text,
+        }
+
+    async def get_news(self) -> list[dict[str, object]]:
+        setting = await self.repo.get(self.NEWS_KEY)
+        if not setting or not setting.value.strip():
+            return []
+        try:
+            raw_items = json.loads(setting.value)
+        except json.JSONDecodeError:
+            return []
+        items: list[dict[str, object]] = []
+        for item in raw_items:
+            created_at_raw = item.get('created_at')
+            created_at = (
+                datetime.fromisoformat(created_at_raw)
+                if isinstance(created_at_raw, str) and created_at_raw
+                else datetime.now(timezone.utc)
+            )
+            items.append(
+                {
+                    'id': str(item.get('id') or uuid.uuid4()),
+                    'title': str(item.get('title') or 'Новость'),
+                    'body': str(item.get('body') or ''),
+                    'image_data_url': item.get('image_data_url'),
+                    'created_at': created_at,
+                }
+            )
+        return items
+
+    async def publish_news(
+        self,
+        *,
+        title: str | None,
+        body: str,
+        image_data_url: str | None = None,
+    ) -> str:
+        normalized_body = body.strip()
+        if not normalized_body and not (image_data_url or '').strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='News text or image is required')
+
+        derived_title = (title or '').strip() or normalized_body.splitlines()[0][:80] or 'Новость'
+        items = await self.get_news()
+        news_id = str(uuid.uuid4())
+        items.insert(
+            0,
+            {
+                'id': news_id,
+                'title': derived_title,
+                'body': normalized_body,
+                'image_data_url': (image_data_url or '').strip() or None,
+                'created_at': datetime.now(timezone.utc),
+            },
+        )
+        serialized_items = [
+            {
+                **item,
+                'created_at': item['created_at'].isoformat() if isinstance(item.get('created_at'), datetime) else item.get('created_at'),
+            }
+            for item in items[:12]
+        ]
+        await self.repo.set(self.NEWS_KEY, json.dumps(serialized_items, ensure_ascii=False))
+        await self.session.flush()
+        return news_id
 
     async def ensure_user_operation_allowed(self, user: User) -> None:
         state = await self.get_status()

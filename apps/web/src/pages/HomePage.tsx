@@ -1,4 +1,4 @@
-﻿import { CircleHelp, Copy, Gift, KeyRound, Rocket, ShieldCheck, Sparkles, Wallet, X } from 'lucide-react';
+﻿import { ChevronDown, CircleHelp, Copy, Gift, KeyRound, Newspaper, Rocket, ShieldCheck, Sparkles, Wallet, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -7,7 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState } from '../components/StateCards';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
-import type { ReferralMe, SupportContact } from '../types/models';
+import type { ReferralMe, SupportContact, SystemNewsList } from '../types/models';
 
 const onboardingSteps = [
   {
@@ -43,6 +43,7 @@ export function HomePage() {
   const { me, telegramProfile, systemStatus } = useAuth();
   const [referral, setReferral] = useState<ReferralMe | null>(null);
   const [support, setSupport] = useState<SupportContact | null>(null);
+  const [news, setNews] = useState<SystemNewsList['items']>([]);
   const [helpOpen, setHelpOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export function HomePage() {
   useEffect(() => {
     apiRequest<ReferralMe>('/referrals/me').then(setReferral).catch(() => null);
     apiRequest<SupportContact>('/support').then(setSupport).catch(() => null);
+    apiRequest<SystemNewsList>('/system/news').then((data) => setNews(data.items)).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -224,6 +226,34 @@ export function HomePage() {
         </div>
       </article>
 
+      <details className="glass-card account-section foldable" open={Boolean(news.length)}>
+        <summary className="foldable-summary">
+          <div>
+            <p className="title-line row-inline"><Newspaper size={16} /> Новости</p>
+            <p className="muted">Обновления сервиса, полезные заметки и важные объявления.</p>
+          </div>
+          <ChevronDown size={18} className="foldable-arrow" />
+        </summary>
+        <div className="foldable-body">
+          {news.length ? (
+            <div className="stack compact-stack">
+              {news.map((item) => (
+                <article key={item.id} className="admin-item">
+                  <div className="row-between">
+                    <p className="title-line">{item.title}</p>
+                    <span className="chip">{new Date(item.created_at).toLocaleDateString()}</span>
+                  </div>
+                  {item.image_data_url && <img className="news-image" src={item.image_data_url} alt={item.title} />}
+                  <p className="muted">{item.body}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">Пока новостей нет. Здесь будут появляться важные обновления и объявления.</p>
+          )}
+        </div>
+      </details>
+
       {systemStatus?.maintenance_mode && (
         <article className="glass-card">
           <p className="title-line">Сервис временно ограничен</p>
@@ -288,3 +318,4 @@ export function HomePage() {
     </section>
   );
 }
+
