@@ -19,6 +19,7 @@ from app.schemas.admin import (
     AdminBindPanelKeyResponse,
     AdminDeleteKeyRequest,
     AdminGrantSubscriptionRequest,
+    AdminClearPaymentsResponse,
     AdminKeyOut,
     AdminPaymentDecisionRequest,
     AdminPaymentsListResponse,
@@ -119,6 +120,16 @@ async def admin_reject_payment(
     )
     payment = await payment_service.mark_manual_payment_failed(payment_id)
     return {'ok': True, 'payment_id': str(payment.id), 'status': payment.status.value}
+
+
+@router.post('/payments/clear-history', response_model=AdminClearPaymentsResponse)
+async def admin_clear_payment_history(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    deleted_count = await service.clear_completed_payments()
+    return AdminClearPaymentsResponse(ok=True, deleted_count=deleted_count)
 
 
 @router.get('/keys', response_model=list[AdminKeyOut])

@@ -92,6 +92,11 @@ class AdminPlansListResponse(BaseModel):
     items: list[PlanOut]
 
 
+class AdminClearPaymentsResponse(BaseModel):
+    ok: bool
+    deleted_count: int
+
+
 class AdminStatsOut(BaseModel):
     total_payments: int
     succeeded_payments: int

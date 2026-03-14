@@ -77,6 +77,7 @@ class PaymentService:
 
         await self.session.commit()
         await self.session.refresh(payment)
+        await self._notify_admin_about_payment_request(user=user, payment=payment, plan_name=plan.name)
         return payment
 
     async def create_renew_intent(
@@ -121,6 +122,7 @@ class PaymentService:
 
         await self.session.commit()
         await self.session.refresh(payment)
+        await self._notify_admin_about_payment_request(user=user, payment=payment, plan_name=plan.name)
         return payment
 
     async def mark_manual_payment_succeeded(self, payment_id: UUID) -> Payment:
@@ -306,3 +308,32 @@ class PaymentService:
     def _build_transfer_note(self, operation: PaymentOperation, plan_name: str) -> str:
         operation_text = 'покупка' if operation == PaymentOperation.PURCHASE else 'продление'
         return f'VPN {operation_text} | {plan_name} | payment:{uuid.uuid4().hex[:10]}'
+
+    async def _notify_admin_about_payment_request(self, *, user: User, payment: Payment, plan_name: str) -> None:
+        admin_telegram_id = self.settings.telegram_admin_id
+        if not admin_telegram_id:
+            return
+
+        account = user.telegram_account
+        user_label = (
+            f'@{account.username}'
+            if account and account.username
+            else f'tg_{account.telegram_user_id}'
+            if account
+            else f'user_{str(user.id)[:8]}'
+        )
+        operation_text = 'покупку' if payment.operation == PaymentOperation.PURCHASE else 'продление'
+        transfer_note = (payment.metadata_json or {}).get('transfer_note') or '-'
+        text = (
+            'Новый запрос на оплату\n\n'
+            f'Пользователь: {user_label}\n'
+            f'Операция: {operation_text}\n'
+            f'Тариф: {plan_name}\n'
+            f'Сумма: {payment.amount} {payment.currency}\n'
+            f'Платёж: {payment.id}\n'
+            f'Комментарий к переводу: {transfer_note}'
+        )
+        await self.notification_service.enqueue_telegram_notification(
+            telegram_user_id=admin_telegram_id,
+            text=text,
+        )

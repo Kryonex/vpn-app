@@ -1,17 +1,17 @@
 :root {
   color-scheme: dark;
-  --bg: #0b1020;
-  --bg-soft: #11172a;
-  --card: #121a2f;
-  --card-strong: #182340;
-  --card-border: rgba(148, 163, 184, 0.14);
-  --accent: #5b8cff;
-  --accent-2: #7c4dff;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --text: #f8fafc;
-  --text-soft: #94a3b8;
+  --bg: #050505;
+  --bg-soft: #0d0d0d;
+  --card: #111111;
+  --card-strong: #181818;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --accent: #f4f4f5;
+  --accent-2: #dc2626;
+  --success: #ffffff;
+  --warning: #ef4444;
+  --danger: #dc2626;
+  --text: #fafafa;
+  --text-soft: #a1a1aa;
   --radius-xl: 28px;
   --radius-lg: 22px;
   --radius-md: 16px;
@@ -37,9 +37,9 @@ body {
   min-height: 100dvh;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(91, 140, 255, 0.2), transparent 30%),
-    radial-gradient(circle at 85% 18%, rgba(124, 77, 255, 0.2), transparent 25%),
-    linear-gradient(180deg, #0b1020 0%, #0b1020 45%, #0d1326 100%);
+    radial-gradient(circle at top left, rgba(220, 38, 38, 0.22), transparent 28%),
+    radial-gradient(circle at 85% 18%, rgba(255, 255, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, #050505 0%, #050505 45%, #0d0d0d 100%);
   overflow-x: hidden;
   overscroll-behavior-y: none;
 }
@@ -85,6 +85,7 @@ a {
   top: -60px;
   left: -120px;
   background: rgba(91, 140, 255, 0.45);
+  background: rgba(220, 38, 38, 0.38);
   animation: float-a 18s ease-in-out infinite;
 }
 
@@ -93,15 +94,15 @@ a {
   height: 300px;
   right: -80px;
   bottom: 14%;
-  background: rgba(124, 77, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
   animation: float-b 20s ease-in-out infinite;
 }
 
 .bg-grid {
   z-index: -4;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: radial-gradient(circle at 50% 20%, black, transparent 75%);
 }

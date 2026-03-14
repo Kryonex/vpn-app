@@ -51,6 +51,7 @@ export function AdminPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
+  const [showCompletedPayments, setShowCompletedPayments] = useState(false);
   const [search, setSearch] = useState('');
   const [lookupUsername, setLookupUsername] = useState('');
   const [lookupResult, setLookupResult] = useState<UserLookup | null>(null);
@@ -191,6 +192,14 @@ export function AdminPage() {
     return acc;
   }, {}), [referrals]);
   const subscriptionsByKey = useMemo(() => Object.fromEntries(subscriptions.map((item) => [item.vpn_key_id, item])), [subscriptions]);
+  const pendingPayments = useMemo(
+    () => payments.filter((payment) => payment.status === 'pending' || payment.status === 'waiting_for_capture'),
+    [payments],
+  );
+  const completedPayments = useMemo(
+    () => payments.filter((payment) => payment.status !== 'pending' && payment.status !== 'waiting_for_capture'),
+    [payments],
+  );
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return users;
@@ -427,20 +436,44 @@ export function AdminPage() {
 
       <div className="admin-grid">
         <article className="glass-card admin-section">
-          <p className="title-line row-inline"><Wallet size={16} /> Платежи</p>
+          <div className="row-between">
+            <p className="title-line row-inline"><Wallet size={16} /> {'\u041f\u043b\u0430\u0442\u0435\u0436\u0438'}</p>
+            <button className="btn btn-ghost" onClick={() => void run(async () => {
+              const result = await apiRequest<{ ok: boolean; deleted_count: number }>('/admin/payments/clear-history', { method: 'POST', body: JSON.stringify({}) });
+              await afterAction(`\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0445 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439 \u043e\u0447\u0438\u0449\u0435\u043d\u0430: ${result.deleted_count}.`);
+            })}>{'\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u0438\u0441\u0442\u043e\u0440\u0438\u044e'}</button>
+          </div>
+          <div className="admin-note">{'\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0437\u0430\u043f\u0440\u043e\u0441\u044b \u0432\u0441\u0435\u0433\u0434\u0430 \u0441\u0432\u0435\u0440\u0445\u0443. \u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0435 \u043f\u043b\u0430\u0442\u0435\u0436\u0438 \u043c\u043e\u0436\u043d\u043e \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u043d\u0438\u0436\u0435 \u0438\u043b\u0438 \u043e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043e\u0434\u043d\u043e\u0439 \u043a\u043d\u043e\u043f\u043a\u043e\u0439.'}</div>
           <div className="admin-list">
-            {payments.slice(0, 20).map((payment) => (
+            {pendingPayments.slice(0, 20).map((payment) => (
               <article className="admin-item" key={payment.id}>
                 <div className="row-between">
-                  <div><p className="title-line">{payment.amount} {payment.currency}</p><p className="muted">Пользователь: {payment.user_id.slice(0, 8)}... · {payment.status}</p></div>
+                  <div><p className="title-line">{payment.amount} {payment.currency}</p><p className="muted">{'\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c:'} {payment.user_id.slice(0, 8)}... {'\u00b7'} {payment.status}</p></div>
                   <div className="admin-actions">
-                    {payment.status !== 'succeeded' && <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/payments/${payment.id}/approve`, { method: 'POST', body: JSON.stringify({ reason: 'manual_approve' }) }); await afterAction('Платёж подтверждён.'); })}>Подтвердить</button>}
-                    {payment.status !== 'failed' && payment.status !== 'canceled' && <button className="btn btn-danger-soft" onClick={() => void run(async () => { await apiRequest(`/admin/payments/${payment.id}/reject`, { method: 'POST', body: JSON.stringify({ reason: 'manual_reject' }) }); await afterAction('Платёж отклонён.'); })}>Отклонить</button>}
+                    {payment.status !== 'succeeded' && <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/payments/${payment.id}/approve`, { method: 'POST', body: JSON.stringify({ reason: 'manual_approve' }) }); await afterAction('\u041f\u043b\u0430\u0442\u0451\u0436 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d.'); })}>{'\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c'}</button>}
+                    {payment.status !== 'failed' && payment.status !== 'canceled' && <button className="btn btn-danger-soft" onClick={() => void run(async () => { await apiRequest(`/admin/payments/${payment.id}/reject`, { method: 'POST', body: JSON.stringify({ reason: 'manual_reject' }) }); await afterAction('\u041f\u043b\u0430\u0442\u0451\u0436 \u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d.'); })}>{'\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c'}</button>}
                   </div>
                 </div>
               </article>
             ))}
+            {!pendingPayments.length && <p className="muted">{'\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445 \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432 \u043d\u0430 \u043e\u043f\u043b\u0430\u0442\u0443.'}</p>}
           </div>
+          <button className="btn btn-ghost" onClick={() => setShowCompletedPayments((prev) => !prev)}>
+            {showCompletedPayments ? '\u0421\u043a\u0440\u044b\u0442\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0435 \u043f\u043b\u0430\u0442\u0435\u0436\u0438' : `\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0435 \u043f\u043b\u0430\u0442\u0435\u0436\u0438 (${completedPayments.length})`}
+          </button>
+          {showCompletedPayments && (
+            <div className="admin-list">
+              {completedPayments.slice(0, 50).map((payment) => (
+                <article className="admin-item" key={payment.id}>
+                  <div className="row-between">
+                    <div><p className="title-line">{payment.amount} {payment.currency}</p><p className="muted">{'\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c:'} {payment.user_id.slice(0, 8)}... {'\u00b7'} {payment.status}</p></div>
+                    <StatusBadge status={payment.status} />
+                  </div>
+                </article>
+              ))}
+              {!completedPayments.length && <p className="muted">{'\u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0445 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.'}</p>}
+            </div>
+          )}
         </article>
 
         <article className="glass-card admin-section">

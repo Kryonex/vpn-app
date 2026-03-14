@@ -69,6 +69,27 @@ class AdminService:
     async def list_payments(self, limit: int = 100, offset: int = 0) -> list[Payment]:
         return await self.payment_repo.list_all(limit=limit, offset=offset)
 
+    async def clear_completed_payments(self) -> int:
+        removable_statuses = {
+            PaymentStatus.SUCCEEDED,
+            PaymentStatus.FAILED,
+            PaymentStatus.CANCELED,
+        }
+        payment_ids = list(
+            (
+                await self.session.scalars(
+                    select(Payment.id).where(Payment.status.in_(removable_statuses))
+                )
+            ).all()
+        )
+        if not payment_ids:
+            return 0
+
+        await self.session.execute(delete(PaymentEvent).where(PaymentEvent.payment_id.in_(payment_ids)))
+        await self.session.execute(delete(Payment).where(Payment.id.in_(payment_ids)))
+        await self.session.commit()
+        return len(payment_ids)
+
     async def list_keys(self, limit: int = 100, offset: int = 0) -> list[VPNKey]:
         stmt = (
             select(VPNKey)
