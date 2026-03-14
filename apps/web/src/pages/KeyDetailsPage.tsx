@@ -1,6 +1,6 @@
 ﻿import { Copy, ExternalLink, QrCode, RefreshCw, Trash2 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { apiRequest, toJsonBody } from '../api/client';
@@ -10,6 +10,12 @@ import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
 import type { VPNKey } from '../types/models';
+
+const connectionGuide = [
+  'Нажмите «Добавить в Happ», если приложение установлено и поддерживает открытие ссылок подключения.',
+  'Если кнопка не сработает, скопируйте ссылку ниже и вставьте её вручную в Happ или другое совместимое приложение.',
+  'Для быстрого импорта также можно отсканировать QR-код прямо с экрана.',
+] as const;
 
 export function KeyDetailsPage() {
   const { keyId } = useParams<{ keyId: string }>();
@@ -90,11 +96,6 @@ export function KeyDetailsPage() {
   const uri = keyData.active_version?.connection_uri;
   const deletionAllowed = keyData.status !== 'active' || !keyData.active_version;
   const happHref = uri || null;
-  const connectionGuide = useMemo(() => ([
-    'Нажмите «Добавить в Happ», если приложение установлено и поддерживает открытие ссылок подключения.',
-    'Если кнопка не сработает, скопируйте ссылку ниже и вставьте её вручную в Happ или другое совместимое приложение.',
-    'Для быстрого импорта также можно отсканировать QR-код прямо с экрана.',
-  ]), []);
 
   return (
     <section className="stack">
