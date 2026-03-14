@@ -20,6 +20,8 @@ class NotificationService:
         *,
         image_data_url: str | None = None,
         image_filename: str | None = None,
+        button_url: str | None = None,
+        button_text: str | None = None,
     ) -> None:
         payload = json.dumps(
             {
@@ -27,6 +29,8 @@ class NotificationService:
                 'text': text,
                 'image_data_url': image_data_url,
                 'image_filename': image_filename,
+                'button_url': button_url,
+                'button_text': button_text,
             },
             ensure_ascii=False,
         )

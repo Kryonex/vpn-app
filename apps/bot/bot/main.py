@@ -86,11 +86,20 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
             text = payload.get('text')
             image_data_url = payload.get('image_data_url')
             image_filename = payload.get('image_filename') or 'image.jpg'
+            button_url = payload.get('button_url')
+            button_text = payload.get('button_text') or 'Открыть'
             if not telegram_user_id or (not text and not image_data_url):
                 logger.warning('Notification worker received malformed payload for queue %s', queue_key)
                 continue
 
             logger.info('Notification worker dequeued message for telegram_user_id=%s', telegram_user_id)
+            reply_markup = None
+            if button_url:
+                reply_markup = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text=str(button_text), url=str(button_url))]
+                    ]
+                )
             if image_data_url:
                 try:
                     _, encoded = str(image_data_url).split(',', 1)
@@ -103,9 +112,10 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
                     chat_id=int(telegram_user_id),
                     photo=BufferedInputFile(image_bytes, filename=str(image_filename)),
                     caption=str(text) if text else None,
+                    reply_markup=reply_markup,
                 )
             else:
-                await bot.send_message(chat_id=int(telegram_user_id), text=str(text))
+                await bot.send_message(chat_id=int(telegram_user_id), text=str(text), reply_markup=reply_markup)
             logger.info('Notification worker sent message for telegram_user_id=%s', telegram_user_id)
         except Exception as exc:  # noqa: BLE001
             logger.exception('Notification worker error: %s', exc)

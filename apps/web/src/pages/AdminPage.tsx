@@ -21,6 +21,7 @@ type ReferralSettings = { referral_bonus_days: number };
 type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
 type NotificationQueueStatus = { queue_key: string; pending_count: number };
+type TelegramProxySettings = { proxy_url: string | null; button_text: string; enabled: boolean };
 type DeleteUserResult = {
   ok: boolean;
   user_id: string;
@@ -86,6 +87,7 @@ export function AdminPage() {
   const [referralSettings, setReferralSettings] = useState<ReferralSettings>({ referral_bonus_days: 7 });
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
+  const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Подключить прокси', enabled: false });
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
   const [showCompletedPayments, setShowCompletedPayments] = useState(false);
   const [search, setSearch] = useState('');
@@ -132,6 +134,7 @@ export function AdminPage() {
       { name: 'referral_settings', run: () => apiRequest<ReferralSettings>('/admin/settings/referral') },
       { name: 'system_status', run: () => apiRequest<SystemStatus>('/admin/system/status') },
       { name: 'notification_queue', run: () => apiRequest<NotificationQueueStatus>('/admin/system/notification-queue') },
+      { name: 'telegram_proxy', run: () => apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy') },
     ];
 
     try {
@@ -198,6 +201,9 @@ export function AdminPage() {
           }
           case 'notification_queue':
             setNotificationQueue(result.value as NotificationQueueStatus);
+            break;
+          case 'telegram_proxy':
+            setTelegramProxy(result.value as TelegramProxySettings);
             break;
           default:
             break;
@@ -382,6 +388,61 @@ export function AdminPage() {
               const result = await apiRequest<{ ok: boolean; cleared_count: number }>('/admin/system/notification-queue/clear', { method: 'POST', body: JSON.stringify({}) });
               await afterAction(`Очередь очищена. Удалено сообщений: ${result.cleared_count}.`);
             })}><Trash2 size={16} /> Очистить очередь</button>
+          </div>
+        </FoldableSection>
+
+        <FoldableSection title="Telegram-прокси" subtitle="Скрытая ссылка для подключения после оплаты" icon={<Link2 size={16} />} defaultOpen={false}>
+          <div className="admin-note">
+            Ссылка хранится на сервере в настройках приложения и не зашивается в код репозитория.
+          </div>
+          <label className="field">
+            <span className="field-label">Ссылка прокси</span>
+            <input
+              className="input"
+              type="password"
+              value={telegramProxy.proxy_url ?? ''}
+              onChange={(e) => setTelegramProxy((prev) => ({ ...prev, proxy_url: e.target.value }))}
+              placeholder="tg://proxy?server=..."
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Текст кнопки</span>
+            <input
+              className="input"
+              value={telegramProxy.button_text}
+              onChange={(e) => setTelegramProxy((prev) => ({ ...prev, button_text: e.target.value }))}
+              placeholder="Подключить прокси"
+            />
+          </label>
+          <div className="toggle-list">
+            <label className="toggle-row">
+              <input type="checkbox" checked={Boolean(telegramProxy.proxy_url?.trim())} readOnly />
+              <span>{telegramProxy.proxy_url?.trim() ? 'Прокси включён' : 'Прокси выключен'}</span>
+            </label>
+          </div>
+          <div className="input-grid">
+            <button className="btn btn-primary" onClick={() => void run(async () => {
+              await apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy', {
+                method: 'PATCH',
+                body: JSON.stringify({
+                  proxy_url: telegramProxy.proxy_url || null,
+                  button_text: telegramProxy.button_text || 'Подключить прокси',
+                }),
+              });
+              await afterAction('Настройки Telegram-прокси сохранены.');
+            })}>
+              <Link2 size={16} /> Сохранить прокси
+            </button>
+            <button className="btn btn-ghost" onClick={() => void run(async () => {
+              const updated = await apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy', {
+                method: 'PATCH',
+                body: JSON.stringify({ proxy_url: null, button_text: 'Подключить прокси' }),
+              });
+              setTelegramProxy(updated);
+              await afterAction('Telegram-прокси отключён.');
+            })}>
+              <Trash2 size={16} /> Отключить
+            </button>
           </div>
         </FoldableSection>
 

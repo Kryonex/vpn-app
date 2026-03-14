@@ -168,6 +168,33 @@ class AdminService:
         await self.session.commit()
         return value
 
+    async def get_telegram_proxy_settings(self) -> dict[str, object]:
+        proxy_url_setting = await self.app_settings_repo.get('telegram_proxy_url')
+        button_text_setting = await self.app_settings_repo.get('telegram_proxy_button_text')
+        proxy_url = proxy_url_setting.value.strip() if proxy_url_setting and proxy_url_setting.value.strip() else None
+        button_text = (
+            button_text_setting.value.strip()
+            if button_text_setting and button_text_setting.value.strip()
+            else 'Подключить прокси'
+        )
+        return {
+            'proxy_url': proxy_url,
+            'button_text': button_text,
+            'enabled': bool(proxy_url),
+        }
+
+    async def set_telegram_proxy_settings(self, *, proxy_url: str | None, button_text: str | None) -> dict[str, object]:
+        normalized_proxy_url = (proxy_url or '').strip()
+        normalized_button_text = (button_text or '').strip() or 'Подключить прокси'
+        await self.app_settings_repo.set('telegram_proxy_url', normalized_proxy_url)
+        await self.app_settings_repo.set('telegram_proxy_button_text', normalized_button_text)
+        await self.session.commit()
+        return {
+            'proxy_url': normalized_proxy_url or None,
+            'button_text': normalized_button_text,
+            'enabled': bool(normalized_proxy_url),
+        }
+
     async def lookup_user_by_username(self, username: str) -> dict[str, object] | None:
         normalized_username = username.lstrip('@').strip().lower()
         if not normalized_username:

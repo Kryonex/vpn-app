@@ -45,6 +45,8 @@ from app.schemas.system import (
     NotificationQueueClearResponse,
     NotificationQueueStatusOut,
     SystemStatusOut,
+    TelegramProxySettingsOut,
+    TelegramProxySettingsUpdateRequest,
 )
 from app.services.admin_service import AdminService
 from app.services.notification_service import NotificationService
@@ -309,6 +311,30 @@ async def admin_clear_notification_queue(
     notifier = NotificationService(redis)
     cleared_count = await notifier.clear_queue()
     return NotificationQueueClearResponse(ok=True, cleared_count=cleared_count)
+
+
+@router.get('/system/telegram-proxy', response_model=TelegramProxySettingsOut)
+async def admin_get_telegram_proxy_settings(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return TelegramProxySettingsOut(**await service.get_telegram_proxy_settings())
+
+
+@router.patch('/system/telegram-proxy', response_model=TelegramProxySettingsOut)
+async def admin_update_telegram_proxy_settings(
+    payload: TelegramProxySettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return TelegramProxySettingsOut(
+        **await service.set_telegram_proxy_settings(
+            proxy_url=payload.proxy_url,
+            button_text=payload.button_text,
+        )
+    )
 
 
 @router.post('/keys/bind-by-username', response_model=AdminBindPanelKeyResponse)

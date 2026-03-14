@@ -20,6 +20,7 @@ from app.models.vpn_key_version import VPNKeyVersion
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
+from app.repositories.app_settings_repository import AppSettingsRepository
 from app.services.notification_service import NotificationService
 from app.services.referral_service import ReferralService
 
@@ -37,6 +38,7 @@ class PaymentService:
         self.payment_repo = PaymentRepository(session)
         self.plan_repo = PlanRepository(session)
         self.key_repo = VPNKeyRepository(session)
+        self.app_settings_repo = AppSettingsRepository(session)
         self.referral_service = ReferralService(session)
         self.settings = get_settings()
 
@@ -230,9 +232,12 @@ class PaymentService:
         self.session.add(version)
 
         if user.telegram_account:
+            proxy_url, proxy_button_text = await self._get_telegram_proxy_button()
             await self.notification_service.enqueue_telegram_notification(
                 telegram_user_id=user.telegram_account.telegram_user_id,
                 text=f'VPN ключ создан: {key.display_name}. Действует до {expires.date().isoformat()}.',
+                button_url=proxy_url,
+                button_text=proxy_button_text,
             )
 
     async def _activate_renew_payment(self, user: User, payment: Payment, duration_days: int) -> None:
@@ -293,9 +298,12 @@ class PaymentService:
             )
 
         if user.telegram_account:
+            proxy_url, proxy_button_text = await self._get_telegram_proxy_button()
             await self.notification_service.enqueue_telegram_notification(
                 telegram_user_id=user.telegram_account.telegram_user_id,
                 text=f'Ключ {key.display_name} продлен до {new_expires.date().isoformat()}.',
+                button_url=proxy_url,
+                button_text=proxy_button_text,
             )
 
     async def _validate_bonus_days(self, user: User, apply_bonus_days: int) -> int:
@@ -308,6 +316,17 @@ class PaymentService:
     def _build_transfer_note(self, operation: PaymentOperation, plan_name: str) -> str:
         operation_text = 'покупка' if operation == PaymentOperation.PURCHASE else 'продление'
         return f'VPN {operation_text} | {plan_name} | payment:{uuid.uuid4().hex[:10]}'
+
+    async def _get_telegram_proxy_button(self) -> tuple[str | None, str]:
+        proxy_url_setting = await self.app_settings_repo.get('telegram_proxy_url')
+        button_text_setting = await self.app_settings_repo.get('telegram_proxy_button_text')
+        proxy_url = proxy_url_setting.value.strip() if proxy_url_setting and proxy_url_setting.value.strip() else None
+        button_text = (
+            button_text_setting.value.strip()
+            if button_text_setting and button_text_setting.value.strip()
+            else 'Подключить прокси'
+        )
+        return proxy_url, button_text
 
     async def _notify_admin_about_payment_request(self, *, user: User, payment: Payment, plan_name: str) -> None:
         admin_telegram_id = self.settings.telegram_admin_id

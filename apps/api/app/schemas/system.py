@@ -64,3 +64,14 @@ class NotificationQueueStatusOut(BaseModel):
 class NotificationQueueClearResponse(BaseModel):
     ok: bool
     cleared_count: int
+
+
+class TelegramProxySettingsOut(BaseModel):
+    proxy_url: str | None = None
+    button_text: str = 'Подключить прокси'
+    enabled: bool = False
+
+
+class TelegramProxySettingsUpdateRequest(BaseModel):
+    proxy_url: str | None = Field(default=None, max_length=2048)
+    button_text: str = Field(default='Подключить прокси', max_length=64)
