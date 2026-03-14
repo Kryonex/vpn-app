@@ -1,12 +1,13 @@
 ﻿from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from app.core.config import get_settings
 from app.core.redis import close_redis, get_redis
@@ -83,12 +84,28 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
             payload = json.loads(raw_payload)
             telegram_user_id = payload.get('telegram_user_id')
             text = payload.get('text')
-            if not telegram_user_id or not text:
+            image_data_url = payload.get('image_data_url')
+            image_filename = payload.get('image_filename') or 'image.jpg'
+            if not telegram_user_id or (not text and not image_data_url):
                 logger.warning('Notification worker received malformed payload for queue %s', queue_key)
                 continue
 
             logger.info('Notification worker dequeued message for telegram_user_id=%s', telegram_user_id)
-            await bot.send_message(chat_id=int(telegram_user_id), text=str(text))
+            if image_data_url:
+                try:
+                    _, encoded = str(image_data_url).split(',', 1)
+                    image_bytes = base64.b64decode(encoded)
+                except Exception:  # noqa: BLE001
+                    logger.warning('Notification worker received invalid image payload for telegram_user_id=%s', telegram_user_id)
+                    continue
+
+                await bot.send_photo(
+                    chat_id=int(telegram_user_id),
+                    photo=BufferedInputFile(image_bytes, filename=str(image_filename)),
+                    caption=str(text) if text else None,
+                )
+            else:
+                await bot.send_message(chat_id=int(telegram_user_id), text=str(text))
             logger.info('Notification worker sent message for telegram_user_id=%s', telegram_user_id)
         except Exception as exc:  # noqa: BLE001
             logger.exception('Notification worker error: %s', exc)

@@ -106,11 +106,15 @@ class SystemStatusService:
         send_to_all: bool,
         force: bool,
         user_id: UUID | None = None,
+        image_data_url: str | None = None,
+        image_filename: str | None = None,
         enqueue_fn,
     ) -> tuple[int, bool, str]:
         normalized = message.strip()
+        normalized_image = (image_data_url or '').strip() or None
         if not normalized:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Message is required')
+            if not normalized_image:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Message text or image is required')
         if send_to_all and user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Use either send_to_all or user_id')
         if not send_to_all and not user_id:
@@ -136,7 +140,9 @@ class SystemStatusService:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
             target_users = [target]
 
-        message_hash = hashlib.sha256(f'{normalized}|{send_to_all}|{user_id or ""}'.encode('utf-8')).hexdigest()
+        message_hash = hashlib.sha256(
+            f'{normalized}|{normalized_image or ""}|{send_to_all}|{user_id or ""}'.encode('utf-8')
+        ).hexdigest()
         duplicate_blocked = False
         if not force:
             recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
@@ -157,7 +163,12 @@ class SystemStatusService:
             account = target.telegram_account
             if not account:
                 continue
-            await enqueue_fn(account.telegram_user_id, normalized)
+            await enqueue_fn(
+                account.telegram_user_id,
+                normalized,
+                image_data_url=normalized_image,
+                image_filename=image_filename,
+            )
             sent_count += 1
 
         audit = AuditLog(
@@ -169,6 +180,7 @@ class SystemStatusService:
             metadata_json={
                 'message_hash': message_hash,
                 'message_preview': normalized[:120],
+                'has_image': bool(normalized_image),
                 'target_count': sent_count,
                 'send_to_all': send_to_all,
             },

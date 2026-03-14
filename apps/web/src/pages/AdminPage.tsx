@@ -2,7 +2,7 @@
   BellRing, ChevronDown, ChevronUp, Gift, KeyRound, Link2, RefreshCcw, Search, Send, Settings2,
   Sparkles, Trash2, UserRound, Wallet, Wrench,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 
 import { apiRequest } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
@@ -105,6 +105,8 @@ export function AdminPage() {
   const [sendUserId, setSendUserId] = useState('');
   const [sendToAll, setSendToAll] = useState(false);
   const [forceSend, setForceSend] = useState(false);
+  const [sendImageDataUrl, setSendImageDataUrl] = useState<string | null>(null);
+  const [sendImageFilename, setSendImageFilename] = useState<string | null>(null);
   const [statusValue, setStatusValue] = useState<SystemStatus['status']>('online');
   const [statusMessage, setStatusMessage] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -277,6 +279,32 @@ export function AdminPage() {
     });
   };
 
+  const handleMessageImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setSendImageDataUrl(null);
+      setSendImageFilename(null);
+      return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+      setError('Фотография слишком большая. Выберите изображение до 4 МБ.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    const result = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Не удалось прочитать изображение'));
+      reader.readAsDataURL(file);
+    });
+
+    setSendImageDataUrl(result);
+    setSendImageFilename(file.name);
+    setMessage(`Фотография прикреплена: ${file.name}`);
+  };
+
   if (loading) return <section className="stack"><PageHeader title="Админ-панель" subtitle="Загружаем данные управления" /><SkeletonCards count={5} /></section>;
 
   return (
@@ -315,6 +343,15 @@ export function AdminPage() {
             {notificationQueue?.queue_key ? ` · ${notificationQueue.queue_key}` : ''}
           </div>
           <label className="field"><span className="field-label">Текст сообщения</span><textarea className="input textarea" value={sendText} onChange={(e) => setSendText(e.target.value)} /></label>
+          <label className="field">
+            <span className="field-label">Фотография</span>
+            <input className="input" type="file" accept="image/*" onChange={(e) => void handleMessageImageChange(e)} />
+          </label>
+          {sendImageFilename && (
+            <div className="admin-note">
+              Прикреплено: <strong>{sendImageFilename}</strong>
+            </div>
+          )}
           <label className="field"><span className="field-label">ID пользователя</span><input className="input" value={sendUserId} onChange={(e) => setSendUserId(e.target.value)} disabled={sendToAll} placeholder="UUID пользователя" /></label>
           <div className="toggle-list">
             <label className="toggle-row"><input type="checkbox" checked={sendToAll} onChange={(e) => setSendToAll(e.target.checked)} /><span>Отправить всем</span></label>
@@ -322,9 +359,25 @@ export function AdminPage() {
           </div>
           <div className="input-grid">
             <button className="btn btn-primary" onClick={() => void run(async () => {
-              const result = await apiRequest<MessageResult>('/admin/messages/send', { method: 'POST', body: JSON.stringify({ message: sendText, user_id: sendToAll ? null : sendUserId || null, send_to_all: sendToAll, force: forceSend }) });
+              const result = await apiRequest<MessageResult>('/admin/messages/send', {
+                method: 'POST',
+                body: JSON.stringify({
+                  message: sendText,
+                  user_id: sendToAll ? null : sendUserId || null,
+                  send_to_all: sendToAll,
+                  force: forceSend,
+                  image_data_url: sendImageDataUrl,
+                  image_filename: sendImageFilename,
+                }),
+              });
+              setSendText('');
+              setSendImageDataUrl(null);
+              setSendImageFilename(null);
               await afterAction(result.duplicate_blocked ? 'Похожая рассылка уже отправлялась недавно.' : `Сообщение поставлено в очередь для ${result.target_count} получателей.`);
             })}><BellRing size={16} /> Отправить</button>
+            <button className="btn btn-ghost" onClick={() => { setSendImageDataUrl(null); setSendImageFilename(null); }}>
+              Убрать фото
+            </button>
             <button className="btn btn-ghost" onClick={() => void run(async () => {
               const result = await apiRequest<{ ok: boolean; cleared_count: number }>('/admin/system/notification-queue/clear', { method: 'POST', body: JSON.stringify({}) });
               await afterAction(`Очередь очищена. Удалено сообщений: ${result.cleared_count}.`);

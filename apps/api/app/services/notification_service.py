@@ -13,8 +13,23 @@ class NotificationService:
         self.redis = redis
         self.settings = get_settings()
 
-    async def enqueue_telegram_notification(self, telegram_user_id: int, text: str) -> None:
-        payload = json.dumps({'telegram_user_id': telegram_user_id, 'text': text}, ensure_ascii=False)
+    async def enqueue_telegram_notification(
+        self,
+        telegram_user_id: int,
+        text: str,
+        *,
+        image_data_url: str | None = None,
+        image_filename: str | None = None,
+    ) -> None:
+        payload = json.dumps(
+            {
+                'telegram_user_id': telegram_user_id,
+                'text': text,
+                'image_data_url': image_data_url,
+                'image_filename': image_filename,
+            },
+            ensure_ascii=False,
+        )
         await self.redis.lpush(self.settings.notification_queue_key, payload)
 
     async def enqueue_raw(self, payload: dict[str, Any]) -> None:

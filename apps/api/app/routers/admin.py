@@ -278,6 +278,8 @@ async def admin_send_message(
         send_to_all=payload.send_to_all,
         force=payload.force,
         user_id=payload.user_id,
+        image_data_url=payload.image_data_url,
+        image_filename=payload.image_filename,
         enqueue_fn=notifier.enqueue_telegram_notification,
     )
     await session.commit()

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 SystemStatusKind = Literal[
@@ -33,10 +33,20 @@ class AdminSystemStatusUpdateRequest(BaseModel):
 
 
 class AdminMessageSendRequest(BaseModel):
-    message: str = Field(min_length=3, max_length=2000)
+    message: str = Field(default='', max_length=2000)
     user_id: UUID | None = None
     send_to_all: bool = False
     force: bool = False
+    image_data_url: str | None = Field(default=None, max_length=8_000_000)
+    image_filename: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode='after')
+    def validate_payload(self) -> 'AdminMessageSendRequest':
+        has_message = bool(self.message.strip())
+        has_image = bool((self.image_data_url or '').strip())
+        if not has_message and not has_image:
+            raise ValueError('Message text or image is required')
+        return self
 
 
 class AdminMessageSendResponse(BaseModel):
