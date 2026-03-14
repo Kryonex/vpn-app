@@ -19,6 +19,7 @@ export type TGWebApp = {
   expand: () => void;
   close: () => void;
   openLink?: (url: string) => void;
+  openTelegramLink?: (url: string) => void;
 };
 
 declare global {
@@ -110,4 +111,41 @@ export async function waitForTelegramWebApp(timeoutMs = 2000, stepMs = 100): Pro
   webApp = window.Telegram?.WebApp ?? null;
   debugTelegramState('wait:timeout', webApp);
   return webApp;
+}
+
+export function normalizeTelegramProxyUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('tg://proxy?')) {
+    return `https://t.me/proxy?${trimmed.slice('tg://proxy?'.length)}`;
+  }
+  return trimmed;
+}
+
+export function openTelegramProxy(rawUrl: string): void {
+  const normalizedUrl = normalizeTelegramProxyUrl(rawUrl);
+  const webApp = window.Telegram?.WebApp;
+
+  console.info('[telegram] open proxy', {
+    hasWebApp: Boolean(webApp),
+    usedTelegramLink: Boolean(webApp?.openTelegramLink),
+    usedOpenLink: Boolean(!webApp?.openTelegramLink && webApp?.openLink),
+    normalizedScheme: normalizedUrl.startsWith('https://') ? 'https' : normalizedUrl.split(':', 1)[0],
+  });
+
+  if (webApp?.openTelegramLink && normalizedUrl.startsWith('https://t.me/')) {
+    webApp.openTelegramLink(normalizedUrl);
+    return;
+  }
+
+  if (webApp?.openLink) {
+    webApp.openLink(normalizedUrl);
+    return;
+  }
+
+  if (normalizedUrl) {
+    window.location.href = normalizedUrl;
+  }
 }

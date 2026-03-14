@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, SkeletonCards } from '../components/StateCards'
 import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
+import { openTelegramProxy } from '../telegram';
 import type { TelegramProxyAccess, VPNKey } from '../types/models';
 
 export function KeysPage() {
@@ -92,9 +93,12 @@ export function KeysPage() {
                 <KeyRound size={16} /> Открыть
               </Link>
               {proxyAccess?.enabled && key.status === 'active' && (
-                <a className="btn btn-ghost" href={proxyAccess.proxy_url ?? undefined}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => proxyAccess.proxy_url && openTelegramProxy(proxyAccess.proxy_url)}
+                >
                   <KeyRound size={16} /> {proxyAccess.button_text}
-                </a>
+                </button>
               )}
               <button className="btn btn-ghost" onClick={() => void copyUri(key)} disabled={!key.active_version?.connection_uri}>
                 <Copy size={16} /> Скопировать

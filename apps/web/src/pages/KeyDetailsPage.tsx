@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
+import { openTelegramProxy } from '../telegram';
 import type { TelegramProxyAccess, VPNKey } from '../types/models';
 
 const connectionGuide = [
@@ -134,9 +135,12 @@ export function KeyDetailsPage() {
                 <Copy size={16} /> Скопировать
               </button>
               {proxyAccess?.enabled && keyData.status === 'active' && (
-                <a className="btn btn-ghost" href={proxyAccess.proxy_url ?? undefined}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => proxyAccess.proxy_url && openTelegramProxy(proxyAccess.proxy_url)}
+                >
                   <ExternalLink size={16} /> {proxyAccess.button_text}
-                </a>
+                </button>
               )}
               <button className="btn btn-ghost" onClick={rotate} disabled={rotating || Boolean(systemStatus?.maintenance_mode)}>
                 <RefreshCw size={16} className={rotating ? 'spin' : ''} /> Перевыпустить
