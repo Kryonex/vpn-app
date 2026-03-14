@@ -9,10 +9,7 @@ import { BuyPlanPage } from './pages/BuyPlanPage';
 import { HomePage } from './pages/HomePage';
 import { KeyDetailsPage } from './pages/KeyDetailsPage';
 import { KeysPage } from './pages/KeysPage';
-import { PaymentsPage } from './pages/PaymentsPage';
-import { ReferralsPage } from './pages/ReferralsPage';
 import { RenewKeyPage } from './pages/RenewKeyPage';
-import { SupportPage } from './pages/SupportPage';
 
 export default function App() {
   const { isLoading, isAuthenticated, isAdmin, error } = useAuth();
@@ -27,14 +24,14 @@ export default function App() {
   );
 
   if (isLoading) {
-    return shell(<LoadingState text="Загружаем кабинет..." />);
+    return shell(<LoadingState text="Загружаем ваш кабинет..." />);
   }
 
   if (!isAuthenticated) {
     return shell(
       <section className="stack">
-        <h1>Ошибка авторизации</h1>
-        <ErrorState text={error ?? 'Откройте приложение внутри Telegram Mini App.'} />
+        <h1>Нужна авторизация</h1>
+        <ErrorState text={error ?? 'Не удалось открыть Mini App через Telegram.'} />
       </section>,
     );
   }
@@ -47,14 +44,14 @@ export default function App() {
         <Route path="/keys/:keyId" element={<KeyDetailsPage />} />
         <Route path="/keys/:keyId/renew" element={<RenewKeyPage />} />
         <Route path="/buy" element={<BuyPlanPage />} />
-        <Route path="/payments" element={<PaymentsPage />} />
-        <Route path="/referrals" element={<ReferralsPage />} />
-        <Route path="/support" element={<SupportPage />} />
-        <Route path="/help" element={<SupportPage />} />
+        <Route path="/payments" element={<Navigate to="/buy" replace />} />
+        <Route path="/referrals" element={<Navigate to="/" replace />} />
+        <Route path="/support" element={<Navigate to="/" replace />} />
+        <Route path="/help" element={<Navigate to="/" replace />} />
         <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />
-    </>,
+    </>
   );
 }

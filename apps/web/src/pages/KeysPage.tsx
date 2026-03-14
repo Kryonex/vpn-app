@@ -1,4 +1,4 @@
-import { Copy, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
+﻿import { Copy, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -30,11 +30,11 @@ export function KeysPage() {
       return;
     }
     await navigator.clipboard.writeText(uri);
-    setMessage(`URL подключения для ключа «${key.display_name}» скопирован.`);
+    setMessage(`Ссылка для ключа «${key.display_name}» скопирована.`);
   };
 
   const removeKey = async (keyId: string) => {
-    if (!window.confirm('Удалить нерабочий ключ из истории?')) {
+    if (!window.confirm('Удалить этот ключ из истории?')) {
       return;
     }
 
@@ -50,13 +50,13 @@ export function KeysPage() {
 
   return (
     <section className="stack">
-      <PageHeader title="Мои ключи" subtitle="Все активные и архивные ключи с быстрыми действиями" />
+      <PageHeader title="Ключи" subtitle="Все активные и архивные подключения с быстрыми действиями" />
       <SystemStatusBanner status={systemStatus} compact />
 
       {loading && <SkeletonCards count={3} />}
       {error && <ErrorState text={error} />}
       {!loading && !error && keys.length === 0 && (
-        <EmptyState title="Ключей пока нет" text="Купите первый тариф, чтобы создать VPN-ключ." />
+        <EmptyState title="Пока нет ключей" text="Создайте первую заявку в разделе «Купить», и здесь появится ваше подключение." />
       )}
 
       {!loading &&
@@ -69,7 +69,7 @@ export function KeysPage() {
                 <p className="muted">
                   {key.current_subscription
                     ? `Действует до ${new Date(key.current_subscription.expires_at).toLocaleDateString()}`
-                    : 'Нет активной подписки'}
+                    : 'Срок действия не найден'}
                 </p>
               </div>
               <StatusBadge status={key.status} />
@@ -80,8 +80,8 @@ export function KeysPage() {
             ) : (
               <p className="muted">
                 {key.status === 'revoked'
-                  ? 'Клиент удалён или отключён в панели 3x-ui. Такой ключ можно удалить из истории.'
-                  : 'У этого ключа пока нет доступного URL подключения.'}
+                  ? 'Этот ключ уже отключён. Его можно удалить из истории или создать новое подключение.'
+                  : 'Ссылка подключения появится здесь, как только ключ будет окончательно подготовлен.'}
               </p>
             )}
 
@@ -89,11 +89,7 @@ export function KeysPage() {
               <Link className="btn btn-primary" to={`/keys/${key.id}`}>
                 <KeyRound size={16} /> Открыть
               </Link>
-              <button
-                className="btn btn-ghost"
-                onClick={() => void copyUri(key)}
-                disabled={!key.active_version?.connection_uri}
-              >
+              <button className="btn btn-ghost" onClick={() => void copyUri(key)} disabled={!key.active_version?.connection_uri}>
                 <Copy size={16} /> Скопировать
               </button>
               <Link className="btn btn-ghost" to={`/keys/${key.id}/renew`}>

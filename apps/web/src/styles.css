@@ -18,7 +18,7 @@
   --radius-sm: 12px;
   --shadow-soft: 0 20px 50px rgba(2, 6, 23, 0.35);
   --shadow-card: 0 32px 72px rgba(2, 6, 23, 0.45);
-  --shadow-glow: 0 0 0 1px rgba(91, 140, 255, 0.1), 0 24px 80px rgba(91, 140, 255, 0.12);
+  --shadow-glow: 0 0 0 1px rgba(220, 38, 38, 0.18), 0 24px 80px rgba(220, 38, 38, 0.18);
   font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -226,7 +226,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: linear-gradient(135deg, #ffffff, var(--accent-2));
   font-weight: 700;
 }
 
@@ -266,7 +266,7 @@ h1 {
 }
 
 .greeting-chip {
-  background: rgba(91, 140, 255, 0.12);
+  background: rgba(220, 38, 38, 0.12);
   color: #dbeafe;
 }
 
@@ -308,8 +308,8 @@ h1 {
 .stat-icon {
   width: 34px;
   height: 34px;
-  color: var(--accent);
-  background: rgba(91, 140, 255, 0.12);
+  color: var(--accent-2);
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .stat-value {
@@ -358,7 +358,7 @@ h1 {
 
 .btn-primary {
   color: white;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: linear-gradient(135deg, #ffffff, var(--accent-2));
   box-shadow: 0 16px 30px rgba(91, 140, 255, 0.28);
 }
 
@@ -726,7 +726,7 @@ select.input:focus {
 }
 
 .toggle-row input {
-  accent-color: var(--accent);
+  accent-color: var(--accent-2);
 }
 
 .spin {
@@ -798,4 +798,156 @@ select.input:focus {
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+
+.page-header-button {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.page-header-button:hover {
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+.quick-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.account-section,
+.buy-instructions-card {
+  display: grid;
+  gap: 14px;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compact-stack {
+  gap: 10px;
+}
+
+.referral-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.hint-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.step-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.18);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  align-items: end;
+  padding: 18px 14px calc(18px + env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(18px);
+}
+
+.modal-card {
+  border-radius: 24px;
+  border: 1px solid var(--card-border);
+  background: linear-gradient(180deg, rgba(17, 17, 17, 0.98), rgba(10, 10, 10, 0.98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  max-height: min(82dvh, 760px);
+  overflow-y: auto;
+}
+
+.onboarding-card {
+  align-self: center;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.support-card,
+.help-faq-item {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 14px;
+}
+
+.compact-plan-card {
+  display: grid;
+  gap: 12px;
+}
+
+.foldable {
+  padding: 0;
+}
+
+.foldable-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.foldable-summary::-webkit-details-marker {
+  display: none;
+}
+
+.foldable-body {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.foldable-arrow {
+  transition: transform 0.2s ease;
+}
+
+details[open] .foldable-arrow {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 640px) {
+  .quick-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-card {
+    border-radius: 22px;
+  }
 }

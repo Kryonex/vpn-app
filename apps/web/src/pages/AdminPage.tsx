@@ -1,8 +1,8 @@
-import {
+﻿import {
   BellRing, ChevronDown, ChevronUp, Gift, KeyRound, Link2, RefreshCcw, Search, Send, Settings2,
   Sparkles, Trash2, UserRound, Wallet, Wrench,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { apiRequest } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
@@ -29,11 +29,40 @@ const statusOptions: Array<{ value: SystemStatus['status']; label: string }> = [
   { value: 'online', label: 'Онлайн' },
   { value: 'degraded', label: 'Есть сбои' },
   { value: 'maintenance', label: 'Техработы' },
-  { value: 'panel_unavailable', label: 'Панель недоступна' },
+  { value: 'panel_unavailable', label: 'Сервис выдачи недоступен' },
   { value: 'server_unavailable', label: 'Сервер недоступен' },
 ];
 
 const userLabel = (user: AdminUser) => user.telegram_username ? `@${user.telegram_username}` : user.telegram_user_id ? `tg_${user.telegram_user_id}` : `user_${user.id.slice(0, 8)}`;
+
+function FoldableSection({
+  title,
+  subtitle,
+  icon,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="glass-card admin-section foldable" open={defaultOpen}>
+      <summary className="foldable-summary">
+        <div>
+          <p className="title-line row-inline">{icon} {title}</p>
+          {subtitle && <p className="muted">{subtitle}</p>}
+        </div>
+        <ChevronDown size={18} className="foldable-arrow" />
+      </summary>
+      <div className="foldable-body">
+        {children}
+      </div>
+    </details>
+  );
+}
 
 export function AdminPage() {
   const { refreshSystemStatus } = useAuth();
@@ -238,8 +267,7 @@ export function AdminPage() {
       </div>
 
       <div className="admin-grid">
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><Settings2 size={16} /> Статус системы</p>
+        <FoldableSection title="Статус системы" subtitle="Публичный статус, ограничения и maintenance mode" icon={<Settings2 size={16} />}>
           <div className="input-grid">
             <label className="field"><span className="field-label">Статус</span><select className="input" value={statusValue} onChange={(e) => setStatusValue(e.target.value as SystemStatus['status'])}>{statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label className="field"><span className="field-label">Плановое время</span><input className="input" type="datetime-local" value={statusScheduledFor} onChange={(e) => setStatusScheduledFor(e.target.value)} /></label>
@@ -254,10 +282,9 @@ export function AdminPage() {
             await apiRequest<SystemStatus>('/admin/system/status', { method: 'PATCH', body: JSON.stringify({ status: statusValue, message: statusMessage || null, maintenance_mode: maintenanceMode, show_to_all: statusShowToAll, scheduled_for: statusScheduledFor ? new Date(statusScheduledFor).toISOString() : null, send_notification_to_all: statusNotifyAll }) });
             await afterAction('Системный статус обновлён.');
           })}><Wrench size={16} /> Сохранить статус</button>
-        </article>
+        </FoldableSection>
 
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><Send size={16} /> Рассылка</p>
+        <FoldableSection title="Рассылка" subtitle="Сообщения пользователям и очередь уведомлений" icon={<Send size={16} />}>
           <div className="admin-note">
             Очередь уведомлений: <strong>{notificationQueue?.pending_count ?? 0}</strong>
             {notificationQueue?.queue_key ? ` · ${notificationQueue.queue_key}` : ''}
@@ -278,10 +305,9 @@ export function AdminPage() {
               await afterAction(`Очередь очищена. Удалено сообщений: ${result.cleared_count}.`);
             })}><Trash2 size={16} /> Очистить очередь</button>
           </div>
-        </article>
+        </FoldableSection>
 
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><Gift size={16} /> Рефералы и бонусы</p>
+        <FoldableSection title="Рефералы и бонусы" subtitle="Награда за приглашения и ручные начисления" icon={<Gift size={16} />} defaultOpen={false}>
           <label className="field"><span className="field-label">Бонус за приглашение</span><input className="input" type="number" value={referralSettings.referral_bonus_days} onChange={(e) => setReferralSettings({ referral_bonus_days: Number(e.target.value || 0) })} /></label>
           <button className="btn btn-primary" onClick={() => void run(async () => {
             await apiRequest('/admin/settings/referral', { method: 'PATCH', body: JSON.stringify({ referral_bonus_days: referralSettings.referral_bonus_days }) });
@@ -297,10 +323,9 @@ export function AdminPage() {
             await apiRequest(`/admin/users/${bonusTargetId}/bonus-days`, { method: 'POST', body: JSON.stringify({ days: bonusDays, reason: bonusReason }) });
             await afterAction('Бонусные дни начислены.');
           })}><Sparkles size={16} /> Начислить бонус</button>
-        </article>
+        </FoldableSection>
 
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><Search size={16} /> Поиск и привязка</p>
+        <FoldableSection title="Поиск и привязка" subtitle="Поиск по Telegram и привязка уже существующего ключа" icon={<Search size={16} />} defaultOpen={false}>
           <div className="input-grid">
             <label className="field"><span className="field-label">Поиск по @username</span><input className="input" value={lookupUsername} onChange={(e) => setLookupUsername(e.target.value)} placeholder="@username" /></label>
             <button className="btn btn-ghost" onClick={() => void run(lookupUser)}><Search size={16} /> Найти</button>
@@ -315,14 +340,13 @@ export function AdminPage() {
           <label className="field"><span className="field-label">Inbound ID</span><input className="input" value={bindInboundId} onChange={(e) => setBindInboundId(e.target.value)} placeholder="1" /></label>
           <button className="btn btn-primary" onClick={() => void run(async () => {
             await apiRequest('/admin/keys/bind-by-username', { method: 'POST', body: JSON.stringify({ username: bindUsername, display_name: bindDisplayName || null, client_uuid: bindClientUuid || null, inbound_id: bindInboundId ? Number(bindInboundId) : null }) });
-            await afterAction('Ключ из панели привязан к пользователю.');
+            await afterAction('Импортированный ключ привязан к пользователю.');
           })}><Link2 size={16} /> Привязать ключ</button>
-        </article>
+        </FoldableSection>
       </div>
 
       <div className="admin-grid">
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><KeyRound size={16} /> Ручная выдача подписки</p>
+        <FoldableSection title="Ручная выдача подписки" subtitle="Выдача доступа без новой оплаты" icon={<KeyRound size={16} />} defaultOpen={false}>
           <label className="field"><span className="field-label">UUID пользователя</span><input className="input" value={grantTargetId} onChange={(e) => setGrantTargetId(e.target.value)} /></label>
           <div className="input-grid">
             <label className="field"><span className="field-label">Тариф</span><select className="input" value={grantPlanId} onChange={(e) => setGrantPlanId(e.target.value)}><option value="">Выберите тариф</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {plan.price} {plan.currency}</option>)}</select></label>
@@ -332,11 +356,10 @@ export function AdminPage() {
             await apiRequest(`/admin/users/${grantTargetId}/grant-subscription`, { method: 'POST', body: JSON.stringify({ plan_id: grantPlanId, key_name: grantKeyName || null }) });
             await afterAction('Подписка выдана вручную.');
           })}><KeyRound size={16} /> Выдать подписку</button>
-        </article>
+        </FoldableSection>
 
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><RefreshCcw size={16} /> Сервисные действия</p>
-          <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest('/admin/system/sync-panel', { method: 'POST', body: JSON.stringify({}) }); await afterAction('Синхронизация с 3x-ui завершена.'); })}><RefreshCcw size={16} /> Синхронизировать с панелью</button>
+        <FoldableSection title="Сервисные действия" subtitle="Синхронизация ключей, мягкая и полная зачистка" icon={<RefreshCcw size={16} />} defaultOpen={false}>
+          <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest('/admin/system/sync-panel', { method: 'POST', body: JSON.stringify({}) }); await afterAction('Синхронизация ключей завершена.'); })}><RefreshCcw size={16} /> Синхронизировать ключи</button>
           <div className="divider" />
           <div className="toggle-list">
             <label className="toggle-row"><input type="radio" checked={resetMode === 'soft'} onChange={() => setResetMode('soft')} /><span>Мягкая зачистка</span></label>
@@ -348,11 +371,10 @@ export function AdminPage() {
             await afterAction('Операция сброса выполнена.');
             setResetConfirm('');
           })}><Trash2 size={16} /> Выполнить зачистку</button>
-        </article>
+        </FoldableSection>
       </div>
 
-      <article className="glass-card admin-section">
-        <p className="title-line row-inline"><Wallet size={16} /> Тарифы</p>
+      <FoldableSection title="Тарифы" subtitle="Создание и редактирование доступных планов" icon={<Wallet size={16} />} defaultOpen={false}>
         <div className="input-grid">
           <input className="input" value={newPlan.name} onChange={(e) => setNewPlan((prev) => ({ ...prev, name: e.target.value }))} placeholder="Название" />
           <input className="input" type="number" value={newPlan.duration_days} onChange={(e) => setNewPlan((prev) => ({ ...prev, duration_days: Number(e.target.value || 0) }))} placeholder="Дней" />
@@ -383,10 +405,9 @@ export function AdminPage() {
             );
           })}
         </div>
-      </article>
+      </FoldableSection>
 
-      <article className="glass-card admin-section">
-        <p className="title-line row-inline"><UserRound size={16} /> Клиенты</p>
+      <FoldableSection title="Клиенты" subtitle="Раскрывающиеся карточки пользователей, ключей и быстрых действий" icon={<UserRound size={16} />}>
         <label className="field"><span className="field-label">Поиск</span><input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="@username, user_id, referral code" /></label>
         <div className="admin-list">
           {filteredUsers.map((user) => {
@@ -432,12 +453,11 @@ export function AdminPage() {
             );
           })}
         </div>
-      </article>
+      </FoldableSection>
 
       <div className="admin-grid">
-        <article className="glass-card admin-section">
+        <FoldableSection title="Платежи" subtitle="Активные запросы сверху, завершённые операции ниже" icon={<Wallet size={16} />}>
           <div className="row-between">
-            <p className="title-line row-inline"><Wallet size={16} /> {'\u041f\u043b\u0430\u0442\u0435\u0436\u0438'}</p>
             <button className="btn btn-ghost" onClick={() => void run(async () => {
               const result = await apiRequest<{ ok: boolean; deleted_count: number }>('/admin/payments/clear-history', { method: 'POST', body: JSON.stringify({}) });
               await afterAction(`\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0445 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439 \u043e\u0447\u0438\u0449\u0435\u043d\u0430: ${result.deleted_count}.`);
@@ -474,10 +494,9 @@ export function AdminPage() {
               {!completedPayments.length && <p className="muted">{'\u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0445 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.'}</p>}
             </div>
           )}
-        </article>
+        </FoldableSection>
 
-        <article className="glass-card admin-section">
-          <p className="title-line row-inline"><KeyRound size={16} /> Последние ключи</p>
+        <FoldableSection title="Последние ключи" subtitle="Быстрый обзор недавно созданных и обновлённых подключений" icon={<KeyRound size={16} />} defaultOpen={false}>
           <div className="admin-list">
             {keys.slice(0, 20).map((key) => (
               <article className="admin-item" key={key.id}>
@@ -488,7 +507,7 @@ export function AdminPage() {
               </article>
             ))}
           </div>
-        </article>
+        </FoldableSection>
       </div>
 
       {message && <div className="toast-success">{message}</div>}

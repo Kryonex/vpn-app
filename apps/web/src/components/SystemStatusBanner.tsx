@@ -1,19 +1,19 @@
-import { AlertTriangle, ShieldAlert, Wrench } from 'lucide-react';
+﻿import { AlertTriangle, ShieldAlert, Wrench } from 'lucide-react';
 
 import type { SystemStatus } from '../types/models';
 
 function statusTitle(status: SystemStatus['status']) {
   switch (status) {
     case 'degraded':
-      return 'Есть частичные сбои';
+      return 'Есть временные сбои';
     case 'maintenance':
       return 'Идут технические работы';
     case 'panel_unavailable':
-      return 'Панель временно недоступна';
+      return 'Сервис выдачи ключей временно недоступен';
     case 'server_unavailable':
       return 'Сервер временно недоступен';
     default:
-      return 'Система работает штатно';
+      return 'Система работает стабильно';
   }
 }
 
