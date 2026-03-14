@@ -137,6 +137,7 @@ video {
   min-height: 100dvh;
   width: 100%;
   min-width: 0;
+  padding-bottom: calc(98px + env(safe-area-inset-bottom));
 }
 
 .app-shell {
@@ -152,12 +153,8 @@ video {
 }
 
 .nav-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
-  padding: 6px 0 max(10px, env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent 0%, rgba(5, 5, 5, 0.78) 22%, rgba(5, 5, 5, 0.96) 100%);
-  backdrop-filter: blur(10px);
+  height: calc(98px + env(safe-area-inset-bottom));
+  flex: 0 0 auto;
 }
 
 .stack {
@@ -208,6 +205,15 @@ h1 {
   height: 34px;
   flex-shrink: 0;
   box-shadow: var(--shadow-soft);
+}
+
+h1,
+h2,
+h3,
+p,
+span,
+label {
+  max-width: 100%;
 }
 
 .hero-card,
@@ -693,9 +699,14 @@ select.input:focus {
 .icon-danger { color: var(--danger); }
 
 .bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
   display: flex;
   gap: 8px;
-  width: 100%;
+  width: min(calc(100vw - 24px), 920px);
   padding: 10px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -710,7 +721,7 @@ select.input:focus {
 
 .nav-link {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: 84px;
   min-height: 58px;
   padding: 10px 12px;
   display: grid;
@@ -1081,6 +1092,7 @@ details[open] .foldable-arrow {
   }
 
   .bottom-nav {
+    width: calc(100vw - 16px);
     border-radius: 20px;
     padding: 8px;
   }
@@ -1094,5 +1106,6 @@ details[open] .foldable-arrow {
     font-size: 0.68rem;
   }
 }
+
 
 

@@ -21,12 +21,9 @@ export default function App() {
       <div className="bg-grid" />
       <div className="container shell-layout">
         <main className="app-shell">{content}</main>
-        {withNav && (
-          <div className="nav-dock">
-            <BottomNav />
-          </div>
-        )}
+        {withNav && <div className="nav-dock" aria-hidden="true" />}
       </div>
+      {withNav && <BottomNav />}
     </div>
   );
 
