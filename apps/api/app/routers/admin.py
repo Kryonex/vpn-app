@@ -18,6 +18,8 @@ from app.schemas.admin import (
     AdminBindPanelKeyRequest,
     AdminBindPanelKeyResponse,
     AdminDeleteKeyRequest,
+    AdminDeleteUserRequest,
+    AdminDeleteUserResponse,
     AdminGrantSubscriptionRequest,
     AdminClearPaymentsResponse,
     AdminKeyOut,
@@ -414,3 +416,15 @@ async def admin_grant_subscription(
         key_id=payload.key_id,
         key_name=payload.key_name,
     )
+
+
+@router.delete('/users/{user_id}', response_model=AdminDeleteUserResponse)
+async def admin_delete_user(
+    user_id: UUID,
+    payload: AdminDeleteUserRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    result = await service.delete_user_with_related_data(user_id=user_id, reason=payload.reason)
+    return AdminDeleteUserResponse(**result)

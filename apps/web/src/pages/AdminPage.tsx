@@ -21,6 +21,13 @@ type ReferralSettings = { referral_bonus_days: number };
 type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
 type NotificationQueueStatus = { queue_key: string; pending_count: number };
+type DeleteUserResult = {
+  ok: boolean;
+  user_id: string;
+  deleted_keys_count: number;
+  deleted_payments_count: number;
+  deleted_referrals_count: number;
+};
 type AdminLoadResult =
   | { name: string; ok: true; value: unknown }
   | { name: string; ok: false; reason: string };
@@ -252,6 +259,24 @@ export function AdminPage() {
     try { await fn(); } catch (err) { setError(err instanceof Error ? err.message : 'Операция завершилась ошибкой'); }
   };
 
+  const deleteUser = async (user: AdminUser) => {
+    const label = userLabel(user);
+    const confirmation = window.prompt(`Удаление необратимо.\n\nБудут удалены пользователь, его ключи, платежи и связанные записи.\n\nЧтобы продолжить, введите УДАЛИТЬ`);
+    if (confirmation?.trim().toUpperCase() !== 'УДАЛИТЬ') {
+      return;
+    }
+
+    await run(async () => {
+      const result = await apiRequest<DeleteUserResult>(`/admin/users/${user.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason: `manual_delete_user:${label}` }),
+      });
+      await afterAction(
+        `Пользователь удалён. Ключей: ${result.deleted_keys_count}, платежей: ${result.deleted_payments_count}, рефералов: ${result.deleted_referrals_count}.`,
+      );
+    });
+  };
+
   if (loading) return <section className="stack"><PageHeader title="Админ-панель" subtitle="Загружаем данные управления" /><SkeletonCards count={5} /></section>;
 
   return (
@@ -447,6 +472,12 @@ export function AdminPage() {
                       </div>
                     ))}
                     {!userKeys.length && <p className="muted">У пользователя пока нет ключей.</p>}
+                    <p className="muted">Удаление пользователя стирает его аккаунт, ключи, платежи и связанные записи без возможности восстановления.</p>
+                    <div className="admin-actions">
+                      <button className="btn btn-danger-soft" onClick={() => void deleteUser(user)}>
+                        <Trash2 size={16} /> Удалить пользователя
+                      </button>
+                    </div>
                   </div>
                 )}
               </article>

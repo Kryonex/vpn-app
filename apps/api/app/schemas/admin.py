@@ -145,3 +145,15 @@ class AdminBindPanelKeyResponse(BaseModel):
 class AdminDeleteKeyRequest(BaseModel):
     reason: str = Field(default='delete_from_history', min_length=3, max_length=255)
 
+
+class AdminDeleteUserRequest(BaseModel):
+    reason: str = Field(default='admin_delete_user', min_length=3, max_length=255)
+
+
+class AdminDeleteUserResponse(BaseModel):
+    ok: bool
+    user_id: UUID
+    deleted_keys_count: int
+    deleted_payments_count: int
+    deleted_referrals_count: int
+

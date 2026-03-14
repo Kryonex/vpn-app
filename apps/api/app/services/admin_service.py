@@ -7,7 +7,7 @@ import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -516,6 +516,112 @@ class AdminService:
         await self.session.execute(delete(VPNKey).where(VPNKey.id == key.id))
         await self.session.commit()
         return {'ok': True, 'key_id': str(key_id)}
+
+    async def delete_user_with_related_data(self, user_id: UUID, reason: str) -> dict[str, object]:
+        user = await self.session.scalar(
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.telegram_account))
+        )
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+        keys = (
+            await self.session.scalars(
+                select(VPNKey)
+                .where(VPNKey.owner_id == user_id)
+                .options(selectinload(VPNKey.versions))
+            )
+        ).all()
+        key_ids = [key.id for key in keys]
+
+        panel_revoked = 0
+        for key in keys:
+            active_version = next((item for item in key.versions if item.is_active), None)
+            if not active_version:
+                continue
+            try:
+                await self.threexui_service.revoke_vpn_client(active_version)
+                panel_revoked += 1
+            except Exception:  # noqa: BLE001
+                logger.warning('Admin delete user: failed to revoke panel client for key %s', key.id)
+
+        payment_ids = list(
+            (
+                await self.session.scalars(
+                    select(Payment.id).where(Payment.user_id == user_id)
+                )
+            ).all()
+        )
+        referral_ids = list(
+            (
+                await self.session.scalars(
+                    select(Referral.id).where(
+                        or_(Referral.referrer_user_id == user_id, Referral.referred_user_id == user_id)
+                    )
+                )
+            ).all()
+        )
+
+        deleted_payments_count = 0
+        deleted_referrals_count = 0
+        if payment_ids:
+            await self.session.execute(delete(PaymentEvent).where(PaymentEvent.payment_id.in_(payment_ids)))
+            deleted_payments_count = (
+                await self.session.execute(delete(Payment).where(Payment.id.in_(payment_ids)))
+            ).rowcount or 0
+
+        await self.session.execute(delete(BonusDayLedger).where(BonusDayLedger.user_id == user_id))
+        if referral_ids:
+            await self.session.execute(delete(ReferralReward).where(ReferralReward.referral_id.in_(referral_ids)))
+            deleted_referrals_count = (
+                await self.session.execute(delete(Referral).where(Referral.id.in_(referral_ids)))
+            ).rowcount or 0
+
+        audit_conditions = [
+            AuditLog.actor_id == str(user_id),
+            (AuditLog.entity_type == 'user') & (AuditLog.entity_id == str(user_id)),
+        ]
+        if key_ids:
+            audit_conditions.append((AuditLog.entity_type == 'vpn_key') & AuditLog.entity_id.in_([str(item) for item in key_ids]))
+        if payment_ids:
+            audit_conditions.append((AuditLog.entity_type == 'payment') & AuditLog.entity_id.in_([str(item) for item in payment_ids]))
+        if referral_ids:
+            audit_conditions.append((AuditLog.entity_type == 'referral') & AuditLog.entity_id.in_([str(item) for item in referral_ids]))
+
+        await self.session.execute(delete(AuditLog).where(or_(*audit_conditions)))
+
+        deleted_keys_count = 0
+        if key_ids:
+            deleted_keys_count = (
+                await self.session.execute(delete(VPNKey).where(VPNKey.id.in_(key_ids)))
+            ).rowcount or 0
+
+        await self.session.execute(delete(User).where(User.id == user_id))
+        self.session.add(
+            AuditLog(
+                actor_type='admin',
+                actor_id=None,
+                action='admin_delete_user',
+                entity_type='admin_action',
+                entity_id=str(user_id),
+                metadata_json={
+                    'reason': reason[:255],
+                    'panel_revoked': panel_revoked,
+                    'deleted_keys_count': int(deleted_keys_count),
+                    'deleted_payments_count': int(deleted_payments_count),
+                    'deleted_referrals_count': int(deleted_referrals_count),
+                },
+            )
+        )
+        await self.session.commit()
+        return {
+            'ok': True,
+            'user_id': user_id,
+            'deleted_keys_count': int(deleted_keys_count),
+            'deleted_payments_count': int(deleted_payments_count),
+            'deleted_referrals_count': int(deleted_referrals_count),
+        }
 
     async def add_bonus_days(self, user_id: UUID, days: int, reason: str) -> None:
         await self.referral_service.adjust_bonus_days(user_id=user_id, days_delta=days, reason=reason)
