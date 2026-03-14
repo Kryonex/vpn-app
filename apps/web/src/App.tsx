@@ -14,12 +14,19 @@ import { RenewKeyPage } from './pages/RenewKeyPage';
 export default function App() {
   const { isLoading, isAuthenticated, isAdmin, error } = useAuth();
 
-  const shell = (content: ReactNode) => (
+  const shell = (content: ReactNode, withNav = false) => (
     <div className="app-frame">
       <div className="bg-layer bg-layer-a" />
       <div className="bg-layer bg-layer-b" />
       <div className="bg-grid" />
-      <main className="container app-shell">{content}</main>
+      <div className="container shell-layout">
+        <main className="app-shell">{content}</main>
+        {withNav && (
+          <div className="nav-dock">
+            <BottomNav />
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -51,7 +58,7 @@ export default function App() {
         <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <BottomNav />
-    </>
+    </>,
+    true,
   );
 }

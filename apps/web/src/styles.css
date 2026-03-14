@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: dark;
   --bg: #050505;
   --bg-soft: #0d0d0d;
@@ -27,6 +27,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html, body, #root {
   height: 100%;
   min-height: 100%;
@@ -51,6 +56,13 @@ button, input, select, textarea {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+img,
+canvas,
+svg,
+video {
+  max-width: 100%;
 }
 
 .app-frame {
@@ -110,15 +122,31 @@ a {
   width: min(100%, 920px);
   margin: 0 auto;
   min-height: 100dvh;
-  padding: 16px 14px calc(116px + env(safe-area-inset-bottom));
+  padding: 16px 14px max(16px, env(safe-area-inset-bottom));
+}
+
+.shell-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .app-shell {
+  flex: 1 1 auto;
   display: grid;
   align-content: start;
   gap: 16px;
-  min-height: calc(100dvh - 16px - 16px - 116px - env(safe-area-inset-bottom));
+  min-height: 0;
   animation: page-in 0.45s ease both;
+}
+
+.nav-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  padding: 6px 0 max(10px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent 0%, rgba(5, 5, 5, 0.78) 22%, rgba(5, 5, 5, 0.96) 100%);
+  backdrop-filter: blur(10px);
 }
 
 .stack {
@@ -128,9 +156,9 @@ a {
 }
 
 .page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 14px;
 }
 
@@ -150,6 +178,8 @@ h1 {
   margin: 6px 0 0;
   color: var(--text-soft);
   line-height: 1.45;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .page-header-chip,
@@ -179,6 +209,7 @@ h1 {
   border: 1px solid var(--card-border);
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.96), rgba(10, 10, 10, 0.98));
   box-shadow: var(--shadow-card);
+  min-width: 0;
 }
 
 .hero-card,
@@ -348,8 +379,8 @@ h1 {
 .action-row,
 .admin-actions,
 .chip-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
@@ -367,6 +398,8 @@ h1 {
   transition: transform 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   white-space: normal;
   text-align: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .btn:active {
@@ -481,10 +514,18 @@ select.input:focus {
 }
 
 .qr-card {
+  width: min(100%, 280px);
   border-radius: 18px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.qr-card canvas {
+  display: block;
+  width: min(100%, 180px) !important;
+  height: auto !important;
+  margin: 0 auto;
 }
 
 .qr-title {
@@ -638,20 +679,14 @@ select.input:focus {
 .icon-danger { color: var(--danger); }
 
 .bottom-nav {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  z-index: 40;
   display: flex;
   gap: 8px;
+  width: 100%;
   padding: 10px;
   overflow-x: auto;
   overflow-y: hidden;
   border-radius: 24px;
   backdrop-filter: blur(18px);
-  transform: translateZ(0);
-  will-change: transform;
   scrollbar-width: none;
 }
 
@@ -660,8 +695,8 @@ select.input:focus {
 }
 
 .nav-link {
-  flex: 1 0 auto;
-  min-width: 74px;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 58px;
   padding: 10px 12px;
   display: grid;
@@ -709,6 +744,10 @@ select.input:focus {
 
 .admin-user-card {
   overflow: hidden;
+}
+
+.admin-user-header > * {
+  min-width: 0;
 }
 
 .admin-user-header {
@@ -769,15 +808,14 @@ select.input:focus {
     padding-inline: 18px;
   }
 
+  .btn {
+    width: auto;
+  }
+
   .stat-grid,
   .admin-grid,
   .input-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bottom-nav {
-    left: max(18px, calc(50% - 470px));
-    right: max(18px, calc(50% - 470px));
   }
 }
 
@@ -903,6 +941,8 @@ select.input:focus {
 }
 
 .modal-card {
+  width: min(100%, 560px);
+  justify-self: center;
   border-radius: 24px;
   border: 1px solid var(--card-border);
   background: linear-gradient(180deg, rgba(17, 17, 17, 0.98), rgba(10, 10, 10, 0.98));
@@ -975,7 +1015,8 @@ details[open] .foldable-arrow {
 
 @media (max-width: 640px) {
   .page-header {
-    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
   }
 
   .page-header h1,
@@ -983,12 +1024,17 @@ details[open] .foldable-arrow {
     max-width: 100%;
   }
 
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
   .quick-summary {
     grid-template-columns: 1fr;
   }
 
   .row-between {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .action-row,
@@ -997,10 +1043,8 @@ details[open] .foldable-arrow {
     grid-template-columns: 1fr;
   }
 
-  .action-row .btn,
-  .action-row a.btn,
-  .admin-actions .btn {
-    width: 100%;
+  .chip-row {
+    grid-template-columns: 1fr;
   }
 
   .container {
@@ -1008,7 +1052,31 @@ details[open] .foldable-arrow {
     padding-right: 12px;
   }
 
+  .glass-card,
+  .hero-card,
+  .modal-card,
+  .skeleton-card,
+  .state-card {
+    border-radius: 18px;
+  }
+
   .modal-card {
-    border-radius: 22px;
+    width: 100%;
+    max-height: min(86dvh, 760px);
+  }
+
+  .bottom-nav {
+    border-radius: 20px;
+    padding: 8px;
+  }
+
+  .nav-link {
+    min-height: 56px;
+    padding: 8px 10px;
+  }
+
+  .nav-link span {
+    font-size: 0.68rem;
   }
 }
+
