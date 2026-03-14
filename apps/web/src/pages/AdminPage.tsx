@@ -28,7 +28,7 @@ type AdminLoadResult =
 const statusOptions: Array<{ value: SystemStatus['status']; label: string }> = [
   { value: 'online', label: 'Онлайн' },
   { value: 'degraded', label: 'Есть сбои' },
-  { value: 'maintenance', label: 'Техработы' },
+  { value: 'maintenance', label: 'Технические работы' },
   { value: 'panel_unavailable', label: 'Сервис выдачи недоступен' },
   { value: 'server_unavailable', label: 'Сервер недоступен' },
 ];
@@ -267,14 +267,14 @@ export function AdminPage() {
       </div>
 
       <div className="admin-grid">
-        <FoldableSection title="Статус системы" subtitle="Публичный статус, ограничения и maintenance mode" icon={<Settings2 size={16} />}>
+        <FoldableSection title="Статус системы" subtitle="Публичный статус, ограничения и режим обслуживания" icon={<Settings2 size={16} />}>
           <div className="input-grid">
             <label className="field"><span className="field-label">Статус</span><select className="input" value={statusValue} onChange={(e) => setStatusValue(e.target.value as SystemStatus['status'])}>{statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label className="field"><span className="field-label">Плановое время</span><input className="input" type="datetime-local" value={statusScheduledFor} onChange={(e) => setStatusScheduledFor(e.target.value)} /></label>
           </div>
           <label className="field"><span className="field-label">Сообщение</span><textarea className="input textarea" value={statusMessage} onChange={(e) => setStatusMessage(e.target.value)} /></label>
           <div className="toggle-list">
-            <label className="toggle-row"><input type="checkbox" checked={maintenanceMode} onChange={(e) => setMaintenanceMode(e.target.checked)} /><span>Maintenance mode</span></label>
+            <label className="toggle-row"><input type="checkbox" checked={maintenanceMode} onChange={(e) => setMaintenanceMode(e.target.checked)} /><span>Режим обслуживания</span></label>
             <label className="toggle-row"><input type="checkbox" checked={statusShowToAll} onChange={(e) => setStatusShowToAll(e.target.checked)} /><span>Показывать всем</span></label>
             <label className="toggle-row"><input type="checkbox" checked={statusNotifyAll} onChange={(e) => setStatusNotifyAll(e.target.checked)} /><span>Отправить уведомление всем</span></label>
           </div>

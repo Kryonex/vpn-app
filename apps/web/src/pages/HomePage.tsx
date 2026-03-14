@@ -63,7 +63,7 @@ export function HomePage() {
   }, [me]);
 
   if (!me) {
-    return <EmptyState title="Не удалось загрузить кабинет" text="Попробуйте переоткрыть Mini App." />;
+    return <EmptyState title="Не удалось загрузить кабинет" text="Попробуйте заново открыть мини-приложение." />;
   }
 
   const nearestExpiry = me.nearest_expiry
@@ -91,7 +91,7 @@ export function HomePage() {
 
     return {
       title: 'Начните с выбора тарифа',
-      text: 'Во вкладке покупки доступны тарифы и создание новой заявки. После оплаты мы активируем ваш первый ключ.',
+      text: 'В разделе «Купить» доступны тарифы и создание новой заявки. После оплаты мы активируем ваш первый ключ.',
       to: '/buy',
       label: 'Выбрать тариф',
       icon: Wallet,
@@ -134,7 +134,7 @@ export function HomePage() {
           )}
           <div>
             <p className="profile-name">{displayName}</p>
-            <p className="profile-username">{username ? `@${username}` : 'Telegram профиль'}</p>
+            <p className="profile-username">{username ? `@${username}` : 'Профиль Telegram'}</p>
           </div>
         </div>
         <p className="hero-label greeting-chip">Добро пожаловать</p>
@@ -165,7 +165,7 @@ export function HomePage() {
 
       <article className="glass-card quick-summary">
         <div>
-          <p className="muted">Ближайшее окончание</p>
+          <p className="muted">Ближайшее окончание подписки</p>
           <p className="title-line">{nearestExpiry}</p>
         </div>
         <div>

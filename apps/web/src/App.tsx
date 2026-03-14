@@ -31,7 +31,7 @@ export default function App() {
     return shell(
       <section className="stack">
         <h1>Нужна авторизация</h1>
-        <ErrorState text={error ?? 'Не удалось открыть Mini App через Telegram.'} />
+        <ErrorState text={error ?? 'Не удалось открыть мини-приложение через Telegram.'} />
       </section>,
     );
   }

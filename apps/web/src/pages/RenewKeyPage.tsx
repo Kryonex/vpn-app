@@ -39,7 +39,7 @@ export function RenewKeyPage() {
       setMessage('Заявка на продление создана. Выполните перевод и отправьте чек администратору.');
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать платеж на продление');
+      setError(err instanceof Error ? err.message : 'Не удалось создать заявку на продление');
     }
   };
 
@@ -49,7 +49,7 @@ export function RenewKeyPage() {
       <SystemStatusBanner status={systemStatus} compact />
 
       <article className="glass-card">
-        <label className="muted" htmlFor="bonus-days">Бонусных дней применить</label>
+        <label className="muted" htmlFor="bonus-days">Сколько бонусных дней использовать</label>
         <div className="input-wrap">
           <Sparkles size={16} />
           <input
@@ -69,7 +69,7 @@ export function RenewKeyPage() {
 
       {transferPhone && (
         <article className="glass-card">
-          <p className="title-line">Оплата переводом</p>
+          <p className="title-line">Как оплатить продление</p>
           <p className="muted">Номер для перевода: <strong>{transferPhone}</strong></p>
           <p className="muted">Комментарий к переводу:</p>
           <p className="mono-block">{transferNote || 'VPN продление'}</p>
