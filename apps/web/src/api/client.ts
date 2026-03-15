@@ -102,11 +102,22 @@ export function clearAccessToken(): void {
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getAccessToken();
-  const requestUrl = `${API_BASE}${path}`;
+  const method = (options?.method || (options?.body ? 'POST' : 'GET')).toUpperCase();
+  const isGetLike = method === 'GET' || method === 'HEAD';
+  const requestPath = isGetLike
+    ? `${path}${path.includes('?') ? '&' : '?'}_ts=${Date.now()}`
+    : path;
+  const requestUrl = `${API_BASE}${requestPath}`;
 
   const headers = new Headers(options?.headers);
   if (options?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
+  }
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'no-cache');
+  }
+  if (!headers.has('Pragma')) {
+    headers.set('Pragma', 'no-cache');
   }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -121,6 +132,7 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   try {
     response = await fetch(requestUrl, {
       ...options,
+      cache: 'no-store',
       headers,
     });
   } catch (error) {

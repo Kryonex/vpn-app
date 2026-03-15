@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -51,9 +51,12 @@ async def get_system_news(
 
 @router.get('/payments', response_model=PaymentSettingsOut)
 async def get_payment_settings(
+    response: Response,
     _: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> PaymentSettingsOut:
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
     return PaymentSettingsOut(**await SystemStatusService(session).get_payment_settings())
 
 

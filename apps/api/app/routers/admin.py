@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -335,17 +335,25 @@ async def admin_clear_notification_queue(
 
 @router.get('/system/payments', response_model=PaymentSettingsOut)
 async def admin_get_payment_settings(
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
     return PaymentSettingsOut(**await SystemStatusService(session).get_payment_settings())
 
 
 @router.patch('/system/payments', response_model=PaymentSettingsOut)
 async def admin_update_payment_settings(
     payload: PaymentSettingsUpdateRequest,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ):
-    return PaymentSettingsOut(**await SystemStatusService(session).set_payment_settings(enabled=payload.enabled))
+    data = await SystemStatusService(session).set_payment_settings(enabled=payload.enabled)
+    await session.commit()
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    return PaymentSettingsOut(**data)
 
 
 @router.get('/system/telegram-proxy', response_model=TelegramProxySettingsOut)
