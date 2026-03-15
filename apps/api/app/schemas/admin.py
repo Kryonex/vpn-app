@@ -73,6 +73,7 @@ class AdminPlanCreateRequest(BaseModel):
     currency: str = Field(min_length=3, max_length=8)
     is_active: bool = True
     sort_order: int = 0
+    inbound_ids: list[int] = Field(default_factory=list)
 
 
 class AdminPlanUpdateRequest(BaseModel):
@@ -82,6 +83,7 @@ class AdminPlanUpdateRequest(BaseModel):
     currency: str | None = Field(default=None, min_length=3, max_length=8)
     is_active: bool | None = None
     sort_order: int | None = None
+    inbound_ids: list[int] | None = None
 
 
 class AdminPaymentDecisionRequest(BaseModel):

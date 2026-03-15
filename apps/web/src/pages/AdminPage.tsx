@@ -22,6 +22,9 @@ type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
 type NotificationQueueStatus = { queue_key: string; pending_count: number };
 type TelegramProxySettings = { proxy_url: string | null; button_text: string; enabled: boolean };
+type AdminInbound = { id: number; remark: string | null; protocol: string | null; port: number | null };
+type PurchaseInboundSettings = { inbound_ids: number[] };
+type FreeTrialSettings = { enabled: boolean; days: number; inbound_ids: number[] };
 type DeleteUserResult = {
   ok: boolean;
   user_id: string;
@@ -88,6 +91,9 @@ export function AdminPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
   const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Подключить прокси', enabled: false });
+  const [availableInbounds, setAvailableInbounds] = useState<AdminInbound[]>([]);
+  const [purchaseInboundIds, setPurchaseInboundIds] = useState<number[]>([]);
+  const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings>({ enabled: false, days: 3, inbound_ids: [] });
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
   const [showCompletedPayments, setShowCompletedPayments] = useState(false);
   const [search, setSearch] = useState('');
@@ -119,7 +125,7 @@ export function AdminPage() {
   const [statusScheduledFor, setStatusScheduledFor] = useState('');
   const [resetMode, setResetMode] = useState<'soft' | 'hard'>('soft');
   const [resetConfirm, setResetConfirm] = useState('');
-  const [newPlan, setNewPlan] = useState({ name: '', duration_days: 30, price: '990', currency: 'RUB', is_active: true, sort_order: 0 });
+  const [newPlan, setNewPlan] = useState({ name: '', duration_days: 30, price: '990', currency: 'RUB', is_active: true, sort_order: 0, inbound_ids: [] as number[] });
   const [planDrafts, setPlanDrafts] = useState<Record<string, Plan>>({});
 
   const load = async () => {
@@ -137,6 +143,9 @@ export function AdminPage() {
       { name: 'system_status', run: () => apiRequest<SystemStatus>('/admin/system/status') },
       { name: 'notification_queue', run: () => apiRequest<NotificationQueueStatus>('/admin/system/notification-queue') },
       { name: 'telegram_proxy', run: () => apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy') },
+      { name: 'inbounds', run: () => apiRequest<AdminInbound[]>('/admin/system/inbounds') },
+      { name: 'purchase_inbounds', run: () => apiRequest<PurchaseInboundSettings>('/admin/system/purchase-inbounds') },
+      { name: 'free_trial', run: () => apiRequest<FreeTrialSettings>('/admin/system/free-trial') },
     ];
 
     try {
@@ -207,6 +216,15 @@ export function AdminPage() {
           case 'telegram_proxy':
             setTelegramProxy(result.value as TelegramProxySettings);
             break;
+          case 'inbounds':
+            setAvailableInbounds(result.value as AdminInbound[]);
+            break;
+          case 'purchase_inbounds':
+            setPurchaseInboundIds((result.value as PurchaseInboundSettings).inbound_ids);
+            break;
+          case 'free_trial':
+            setFreeTrialSettings(result.value as FreeTrialSettings);
+            break;
           default:
             break;
         }
@@ -253,7 +271,10 @@ export function AdminPage() {
   }, [search, users]);
 
   const afterAction = async (text: string) => { setMessage(text); await load(); await refreshSystemStatus(); };
-  const updatePlanDraft = (id: string, field: keyof Plan, value: string | number | boolean) => setPlanDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  const updatePlanDraft = (id: string, field: keyof Plan, value: string | number | boolean | number[]) => setPlanDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  const getSelectedInboundIds = (event: ChangeEvent<HTMLSelectElement>) =>
+    Array.from(event.target.selectedOptions).map((option) => Number(option.value)).filter((value) => Number.isFinite(value));
+  const inboundLabel = (inbound: AdminInbound) => [inbound.remark || `Inbound ${inbound.id}`, inbound.protocol, inbound.port ? `:${inbound.port}` : null].filter(Boolean).join(' ');
 
   const lookupUser = async () => {
     try {
@@ -463,7 +484,55 @@ export function AdminPage() {
             })}>
               <Trash2 size={16} /> Отключить
             </button>
+            </div>
+          </FoldableSection>
+
+        <FoldableSection title="Бесплатный доступ и inbound'ы" subtitle="Глобальные inbound'ы для оплат и отдельные настройки пробного доступа" icon={<Wrench size={16} />} defaultOpen={false}>
+          <label className="field">
+            <span className="field-label">Inbound'ы для платных подписок</span>
+            <select className="input" multiple value={purchaseInboundIds.map(String)} onChange={(e) => setPurchaseInboundIds(getSelectedInboundIds(e))}>
+              {availableInbounds.map((inbound) => (
+                <option key={inbound.id} value={inbound.id}>{inboundLabel(inbound)}</option>
+              ))}
+            </select>
+          </label>
+          <button className="btn btn-primary" onClick={() => void run(async () => {
+            await apiRequest('/admin/system/purchase-inbounds', {
+              method: 'PATCH',
+              body: JSON.stringify({ inbound_ids: purchaseInboundIds }),
+            });
+            await afterAction('Глобальные inbound’ы для платных подписок сохранены.');
+          })}>
+            <Wrench size={16} /> Сохранить inbound'ы
+          </button>
+          <div className="divider" />
+          <div className="toggle-list">
+            <label className="toggle-row">
+              <input type="checkbox" checked={freeTrialSettings.enabled} onChange={(e) => setFreeTrialSettings((prev) => ({ ...prev, enabled: e.target.checked }))} />
+              <span>Включить бесплатный доступ для новых пользователей</span>
+            </label>
           </div>
+          <label className="field">
+            <span className="field-label">Бесплатных дней</span>
+            <input className="input" type="number" value={freeTrialSettings.days} onChange={(e) => setFreeTrialSettings((prev) => ({ ...prev, days: Number(e.target.value || 1) }))} />
+          </label>
+          <label className="field">
+            <span className="field-label">Inbound'ы для бесплатного доступа</span>
+            <select className="input" multiple value={freeTrialSettings.inbound_ids.map(String)} onChange={(e) => setFreeTrialSettings((prev) => ({ ...prev, inbound_ids: getSelectedInboundIds(e) }))}>
+              {availableInbounds.map((inbound) => (
+                <option key={inbound.id} value={inbound.id}>{inboundLabel(inbound)}</option>
+              ))}
+            </select>
+          </label>
+          <button className="btn btn-primary" onClick={() => void run(async () => {
+            await apiRequest('/admin/system/free-trial', {
+              method: 'PATCH',
+              body: JSON.stringify(freeTrialSettings),
+            });
+            await afterAction('Настройки бесплатного доступа сохранены.');
+          })}>
+            <Gift size={16} /> Сохранить бесплатный доступ
+          </button>
         </FoldableSection>
 
         <FoldableSection title="Рефералы и бонусы" subtitle="Награда за приглашения и ручные начисления" icon={<Gift size={16} />} defaultOpen={false}>
@@ -496,7 +565,15 @@ export function AdminPage() {
             <label className="field"><span className="field-label">Название ключа</span><input className="input" value={bindDisplayName} onChange={(e) => setBindDisplayName(e.target.value)} placeholder="VPN ключ" /></label>
             <label className="field"><span className="field-label">UUID клиента</span><input className="input" value={bindClientUuid} onChange={(e) => setBindClientUuid(e.target.value)} placeholder="client uuid" /></label>
           </div>
-          <label className="field"><span className="field-label">Inbound ID</span><input className="input" value={bindInboundId} onChange={(e) => setBindInboundId(e.target.value)} placeholder="1" /></label>
+          <label className="field">
+            <span className="field-label">Inbound</span>
+            <select className="input" value={bindInboundId} onChange={(e) => setBindInboundId(e.target.value)}>
+              <option value="">Автоматически определить</option>
+              {availableInbounds.map((inbound) => (
+                <option key={inbound.id} value={String(inbound.id)}>{inboundLabel(inbound)}</option>
+              ))}
+            </select>
+          </label>
           <button className="btn btn-primary" onClick={() => void run(async () => {
             await apiRequest('/admin/keys/bind-by-username', { method: 'POST', body: JSON.stringify({ username: bindUsername, display_name: bindDisplayName || null, client_uuid: bindClientUuid || null, inbound_id: bindInboundId ? Number(bindInboundId) : null }) });
             await afterAction('Импортированный ключ привязан к пользователю.');
@@ -540,10 +617,18 @@ export function AdminPage() {
           <input className="input" value={newPlan.price} onChange={(e) => setNewPlan((prev) => ({ ...prev, price: e.target.value }))} placeholder="Цена" />
           <input className="input" value={newPlan.currency} onChange={(e) => setNewPlan((prev) => ({ ...prev, currency: e.target.value }))} placeholder="Валюта" />
         </div>
+        <label className="field">
+          <span className="field-label">Inbound'ы тарифа</span>
+          <select className="input" multiple value={newPlan.inbound_ids.map(String)} onChange={(e) => setNewPlan((prev) => ({ ...prev, inbound_ids: getSelectedInboundIds(e) }))}>
+            {availableInbounds.map((inbound) => (
+              <option key={inbound.id} value={inbound.id}>{inboundLabel(inbound)}</option>
+            ))}
+          </select>
+        </label>
         <button className="btn btn-primary" onClick={() => void run(async () => {
           await apiRequest('/admin/plans', { method: 'POST', body: JSON.stringify({ ...newPlan, price: Number(newPlan.price) }) });
           await afterAction('Тариф создан.');
-          setNewPlan({ name: '', duration_days: 30, price: '990', currency: 'RUB', is_active: true, sort_order: 0 });
+          setNewPlan({ name: '', duration_days: 30, price: '990', currency: 'RUB', is_active: true, sort_order: 0, inbound_ids: [] });
         })}><Wallet size={16} /> Создать тариф</button>
         <div className="admin-list">
           {plans.map((plan) => {
@@ -556,6 +641,14 @@ export function AdminPage() {
                   <input className="input" value={String(draft.price)} onChange={(e) => updatePlanDraft(plan.id, 'price', e.target.value)} />
                   <input className="input" value={draft.currency} onChange={(e) => updatePlanDraft(plan.id, 'currency', e.target.value)} />
                 </div>
+                <label className="field">
+                  <span className="field-label">Inbound'ы тарифа</span>
+                  <select className="input" multiple value={(draft.inbound_ids ?? []).map(String)} onChange={(e) => updatePlanDraft(plan.id, 'inbound_ids', getSelectedInboundIds(e))}>
+                    {availableInbounds.map((inbound) => (
+                      <option key={inbound.id} value={inbound.id}>{inboundLabel(inbound)}</option>
+                    ))}
+                  </select>
+                </label>
                 <div className="row-between">
                   <label className="toggle-row"><input type="checkbox" checked={draft.is_active} onChange={(e) => updatePlanDraft(plan.id, 'is_active', e.target.checked)} /><span>Активен</span></label>
                   <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/plans/${plan.id}`, { method: 'PATCH', body: JSON.stringify({ ...draft, price: Number(draft.price) }) }); await afterAction('Тариф обновлён.'); })}>Сохранить</button>

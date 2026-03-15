@@ -12,4 +12,5 @@ class PlanOut(BaseSchema):
     currency: str
     is_active: bool
     sort_order: int
+    inbound_ids: list[int] = []
 

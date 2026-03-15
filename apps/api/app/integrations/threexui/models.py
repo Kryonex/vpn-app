@@ -30,6 +30,8 @@ class ThreeXUICreatedClient(BaseModel):
     client_uuid: str
     inbound_id: int
     email_remark: str
+    managed_inbound_ids: list[int] = []
+    sub_id: str | None = None
     connection_uri: str | None = None
     raw: dict[str, Any] | None = None
 

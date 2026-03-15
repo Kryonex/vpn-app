@@ -1,7 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 
 from app.integrations.threexui.client import ThreeXUIClient
@@ -42,50 +43,115 @@ class ThreeXUIService:
         suffix = f'k{str(key.id)[:6]}v{version_number}'
         return self._sanitize_label(f'{identity}_{suffix}')
 
+    def _extract_managed_inbound_ids(self, version: VPNKeyVersion) -> list[int]:
+        raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
+        raw_ids = raw_config.get('managed_inbound_ids')
+        if isinstance(raw_ids, list):
+            normalized = sorted({int(item) for item in raw_ids if isinstance(item, int) or str(item).isdigit()})
+            if normalized:
+                return normalized
+        return [version.inbound_id] if version.inbound_id is not None else []
+
+    def _extract_sub_id(self, version: VPNKeyVersion) -> str | None:
+        raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
+        value = raw_config.get('sub_id')
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+
     async def create_vpn_client(
         self,
         user: User,
         key: VPNKey,
         subscription: Subscription,
         version_number: int,
+        inbound_ids: list[int] | None = None,
     ) -> ThreeXUICreatedClient:
         remark = self._build_email_remark(user, key, version_number)
-        created = await self.client.create_client_on_default_inbound(email_remark=remark, expires_at=subscription.expires_at)
+        target_inbound_ids = sorted({int(item) for item in (inbound_ids or []) if int(item) > 0})
+
+        if not target_inbound_ids:
+            created = await self.client.create_client_on_default_inbound(
+                email_remark=remark,
+                expires_at=subscription.expires_at,
+            )
+            created.managed_inbound_ids = [created.inbound_id]
+            return created
+
+        client_uuid = str(uuid.uuid4())
+        sub_id = uuid.uuid4().hex[:16]
+        created = await self.client.add_client(
+            inbound_id=target_inbound_ids[0],
+            client_uuid=client_uuid,
+            email_remark=remark,
+            expires_at=subscription.expires_at,
+            sub_id=sub_id,
+        )
+        additional_payloads: list[dict[str, object]] = []
+        for inbound_id in target_inbound_ids[1:]:
+            extra = await self.client.add_client(
+                inbound_id=inbound_id,
+                client_uuid=client_uuid,
+                email_remark=remark,
+                expires_at=subscription.expires_at,
+                sub_id=sub_id,
+            )
+            additional_payloads.append({'inbound_id': inbound_id, 'raw': extra.raw})
+
+        created.managed_inbound_ids = target_inbound_ids
+        created.sub_id = sub_id
+        created.raw = {
+            'primary': created.raw,
+            'additional': additional_payloads,
+            'managed_inbound_ids': target_inbound_ids,
+            'sub_id': sub_id,
+        }
         if not created.connection_uri:
             snapshot = await self.client.get_client_snapshot(
                 inbound_id=created.inbound_id,
                 client_uuid=created.client_uuid,
                 email_remark=created.email_remark,
+                fallback_sub_id=sub_id,
             )
             if snapshot and snapshot.connection_uri:
                 created.connection_uri = snapshot.connection_uri
         return created
 
     async def extend_vpn_client(self, version: VPNKeyVersion, new_expiry: datetime) -> str | None:
-        if version.inbound_id is None:
+        managed_inbound_ids = self._extract_managed_inbound_ids(version)
+        if not managed_inbound_ids:
             logger.warning('3x-ui extend skipped for key version %s: inbound_id missing', version.id)
             return version.connection_uri
 
-        await self.client.update_client_expiry(
-            inbound_id=version.inbound_id,
-            client_uuid=version.threexui_client_uuid,
-            email_remark=version.email_remark or version.threexui_client_uuid,
-            expires_at=new_expiry,
-        )
+        sub_id = self._extract_sub_id(version)
+        for inbound_id in managed_inbound_ids:
+            await self.client.update_client_expiry(
+                inbound_id=inbound_id,
+                client_uuid=version.threexui_client_uuid,
+                email_remark=version.email_remark or version.threexui_client_uuid,
+                expires_at=new_expiry,
+                sub_id=sub_id,
+            )
 
         snapshot = await self.client.get_client_snapshot(
-            inbound_id=version.inbound_id,
+            inbound_id=managed_inbound_ids[0],
             client_uuid=version.threexui_client_uuid,
             email_remark=version.email_remark,
+            fallback_sub_id=sub_id,
         )
         return snapshot.connection_uri if snapshot and snapshot.connection_uri else version.connection_uri
 
     async def revoke_vpn_client(self, version: VPNKeyVersion) -> None:
-        await self.client.delete_client(
-            version.threexui_client_uuid,
-            inbound_id=version.inbound_id,
-            email_remark=version.email_remark,
-        )
+        managed_inbound_ids = self._extract_managed_inbound_ids(version)
+        if not managed_inbound_ids:
+            managed_inbound_ids = [version.inbound_id] if version.inbound_id is not None else []
+
+        for inbound_id in managed_inbound_ids:
+            await self.client.delete_client(
+                version.threexui_client_uuid,
+                inbound_id=inbound_id,
+                email_remark=version.email_remark,
+            )
 
     async def rotate_vpn_client(
         self,
@@ -94,10 +160,16 @@ class ThreeXUIService:
         subscription: Subscription,
         current_version: VPNKeyVersion,
         new_version_number: int,
+        inbound_ids: list[int] | None = None,
     ) -> ThreeXUICreatedClient:
-        # Rotation is strict: old client must be removed/revoked in panel before issuing a replacement.
         await self.revoke_vpn_client(current_version)
-        return await self.create_vpn_client(user=user, key=key, subscription=subscription, version_number=new_version_number)
+        return await self.create_vpn_client(
+            user=user,
+            key=key,
+            subscription=subscription,
+            version_number=new_version_number,
+            inbound_ids=inbound_ids or self._extract_managed_inbound_ids(current_version),
+        )
 
     async def sync_key_with_panel_state(self, key: VPNKey) -> bool:
         changed = False
@@ -107,18 +179,31 @@ class ThreeXUIService:
             if not version.is_active:
                 continue
 
-            snapshot = await self.client.get_client_snapshot(
-                inbound_id=version.inbound_id,
-                client_uuid=version.threexui_client_uuid,
-                email_remark=version.email_remark,
-            )
+            managed_inbound_ids = self._extract_managed_inbound_ids(version)
+            sub_id = self._extract_sub_id(version)
+            snapshots: list[ThreeXUIPanelClientSnapshot] = []
+            missing_inbound = False
 
-            if not snapshot:
+            for inbound_id in managed_inbound_ids:
+                snapshot = await self.client.get_client_snapshot(
+                    inbound_id=inbound_id,
+                    client_uuid=version.threexui_client_uuid,
+                    email_remark=version.email_remark,
+                    fallback_sub_id=sub_id,
+                )
+                if not snapshot:
+                    missing_inbound = True
+                    break
+                snapshots.append(snapshot)
+
+            if missing_inbound or not snapshots:
                 version.is_active = False
                 version.revoked_at = version.revoked_at or now
                 changed = True
                 logger.info('3x-ui sync: client missing in panel, revoke local version=%s', version.id)
                 continue
+
+            snapshot = snapshots[0]
 
             if snapshot.connection_uri and snapshot.connection_uri != version.connection_uri:
                 version.connection_uri = snapshot.connection_uri
@@ -130,6 +215,14 @@ class ThreeXUIService:
 
             if snapshot.inbound_id is not None and snapshot.inbound_id != version.inbound_id:
                 version.inbound_id = snapshot.inbound_id
+                changed = True
+
+            raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
+            if raw_config.get('managed_inbound_ids') != managed_inbound_ids:
+                raw_config['managed_inbound_ids'] = managed_inbound_ids
+                if sub_id:
+                    raw_config['sub_id'] = sub_id
+                version.raw_config = raw_config
                 changed = True
 
         has_active_version = any(item.is_active for item in key.versions)

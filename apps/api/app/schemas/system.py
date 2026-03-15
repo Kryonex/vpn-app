@@ -95,3 +95,30 @@ class NewsItemOut(BaseModel):
 
 class SystemNewsListOut(BaseModel):
     items: list[NewsItemOut]
+
+
+class AdminInboundOut(BaseModel):
+    id: int
+    remark: str | None = None
+    protocol: str | None = None
+    port: int | None = None
+
+
+class PurchaseInboundSettingsOut(BaseModel):
+    inbound_ids: list[int]
+
+
+class PurchaseInboundSettingsUpdateRequest(BaseModel):
+    inbound_ids: list[int] = Field(default_factory=list)
+
+
+class FreeTrialSettingsOut(BaseModel):
+    enabled: bool = False
+    days: int = 3
+    inbound_ids: list[int] = Field(default_factory=list)
+
+
+class FreeTrialSettingsUpdateRequest(BaseModel):
+    enabled: bool = False
+    days: int = Field(default=3, ge=1, le=365)
+    inbound_ids: list[int] = Field(default_factory=list)

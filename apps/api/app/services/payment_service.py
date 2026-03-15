@@ -21,6 +21,7 @@ from app.repositories.payment_repository import PaymentRepository
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
 from app.repositories.app_settings_repository import AppSettingsRepository
+from app.services.access_policy_service import AccessPolicyService
 from app.services.notification_service import NotificationService
 from app.services.referral_service import ReferralService
 
@@ -39,6 +40,7 @@ class PaymentService:
         self.plan_repo = PlanRepository(session)
         self.key_repo = VPNKeyRepository(session)
         self.app_settings_repo = AppSettingsRepository(session)
+        self.access_policy = AccessPolicyService(session)
         self.referral_service = ReferralService(session)
         self.settings = get_settings()
 
@@ -218,7 +220,17 @@ class PaymentService:
         key.status = VPNKeyStatus.ACTIVE
         payment.vpn_key_id = key.id
 
-        created = await self.threexui_service.create_vpn_client(user=user, key=key, subscription=subscription, version_number=1)
+        inbound_ids = await self.access_policy.resolve_plan_inbound_ids(
+            plan_id=payment.plan_id,
+            threexui_service=self.threexui_service,
+        )
+        created = await self.threexui_service.create_vpn_client(
+            user=user,
+            key=key,
+            subscription=subscription,
+            version_number=1,
+            inbound_ids=inbound_ids,
+        )
         version = VPNKeyVersion(
             vpn_key_id=key.id,
             version=1,
@@ -283,6 +295,10 @@ class PaymentService:
                 key=key,
                 subscription=current_subscription,
                 version_number=next_version,
+                inbound_ids=await self.access_policy.resolve_plan_inbound_ids(
+                    plan_id=payment.plan_id,
+                    threexui_service=self.threexui_service,
+                ),
             )
             self.session.add(
                 VPNKeyVersion(

@@ -39,11 +39,16 @@ from app.schemas.admin import (
     AdminUserOut,
 )
 from app.schemas.system import (
+    AdminInboundOut,
     AdminMessageSendRequest,
     AdminMessageSendResponse,
     AdminSystemStatusUpdateRequest,
+    FreeTrialSettingsOut,
+    FreeTrialSettingsUpdateRequest,
     NotificationQueueClearResponse,
     NotificationQueueStatusOut,
+    PurchaseInboundSettingsOut,
+    PurchaseInboundSettingsUpdateRequest,
     SystemStatusOut,
     TelegramProxySettingsOut,
     TelegramProxySettingsUpdateRequest,
@@ -349,6 +354,59 @@ async def admin_update_telegram_proxy_settings(
     )
 
 
+@router.get('/system/inbounds', response_model=list[AdminInboundOut])
+async def admin_list_inbounds(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return [AdminInboundOut(**item) for item in await service.list_available_inbounds()]
+
+
+@router.get('/system/purchase-inbounds', response_model=PurchaseInboundSettingsOut)
+async def admin_get_purchase_inbounds(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return PurchaseInboundSettingsOut(**await service.get_purchase_inbound_settings())
+
+
+@router.patch('/system/purchase-inbounds', response_model=PurchaseInboundSettingsOut)
+async def admin_patch_purchase_inbounds(
+    payload: PurchaseInboundSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return PurchaseInboundSettingsOut(**await service.set_purchase_inbound_settings(payload.inbound_ids))
+
+
+@router.get('/system/free-trial', response_model=FreeTrialSettingsOut)
+async def admin_get_free_trial_settings(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return FreeTrialSettingsOut(**await service.get_free_trial_settings())
+
+
+@router.patch('/system/free-trial', response_model=FreeTrialSettingsOut)
+async def admin_patch_free_trial_settings(
+    payload: FreeTrialSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return FreeTrialSettingsOut(
+        **await service.set_free_trial_settings(
+            enabled=payload.enabled,
+            days=payload.days,
+            inbound_ids=payload.inbound_ids,
+        )
+    )
+
+
 @router.post('/keys/bind-by-username', response_model=AdminBindPanelKeyResponse)
 async def admin_bind_panel_key_by_username(
     payload: AdminBindPanelKeyRequest,
@@ -384,6 +442,7 @@ async def admin_create_plan(
         currency=payload.currency,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
+        inbound_ids=payload.inbound_ids,
     )
     return {'ok': True, 'plan_id': str(plan.id)}
 
@@ -404,6 +463,7 @@ async def admin_update_plan(
         currency=payload.currency,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
+        inbound_ids=payload.inbound_ids,
     )
     return {'ok': True, 'plan_id': str(plan.id)}
 

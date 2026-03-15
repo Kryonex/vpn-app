@@ -3,13 +3,16 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.security import create_access_token, validate_telegram_init_data
 from app.integrations.threexui.service import ThreeXUIService
+from app.models.audit_log import AuditLog
 from app.models.enums import SubscriptionStatus, VPNKeyStatus
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.vpn_key_version import VPNKeyVersion
+from app.services.access_policy_service import AccessPolicyService
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
@@ -23,6 +26,7 @@ class AuthService:
         self.referral_service = ReferralService(session)
         self.key_repo = VPNKeyRepository(session)
         self.plan_repo = PlanRepository(session)
+        self.access_policy = AccessPolicyService(session)
 
     async def authenticate_telegram(self, init_data: str, bot_token: str) -> tuple[User, str]:
         validated = validate_telegram_init_data(init_data, bot_token)
@@ -50,6 +54,7 @@ class AuthService:
 
         await self.referral_service.link_referred_user(user, validated.get('start_param'))
         await self._import_panel_keys_for_username_if_needed(user=user, username=username)
+        await self._maybe_grant_free_trial(user)
 
         await self.session.commit()
         await self.session.refresh(user)
@@ -106,7 +111,12 @@ class AuthService:
             return
 
         now = datetime.now(timezone.utc)
+        grouped_snapshots: dict[str, list] = {}
         for snapshot in snapshots:
+            grouped_snapshots.setdefault(snapshot.client_uuid, []).append(snapshot)
+
+        for client_uuid, snapshot_group in grouped_snapshots.items():
+            snapshot = snapshot_group[0]
             if await self.key_repo.exists_by_client_uuid(snapshot.client_uuid):
                 continue
 
@@ -135,12 +145,94 @@ class AuthService:
                 VPNKeyVersion(
                     vpn_key_id=key.id,
                     version=1,
-                    threexui_client_uuid=snapshot.client_uuid,
+                    threexui_client_uuid=client_uuid,
                     inbound_id=snapshot.inbound_id,
                     email_remark=snapshot.email_remark or f'@{username}',
                     connection_uri=snapshot.connection_uri,
-                    raw_config=snapshot.raw,
+                    raw_config={
+                        'imported_from_panel': True,
+                        'managed_inbound_ids': [
+                            item.inbound_id for item in snapshot_group if item.inbound_id is not None
+                        ],
+                        'sub_id': next((item.sub_id for item in snapshot_group if item.sub_id), None),
+                        'snapshots': [item.raw for item in snapshot_group],
+                    },
                     is_active=sub_status == SubscriptionStatus.ACTIVE,
                     revoked_at=None if sub_status == SubscriptionStatus.ACTIVE else now,
                 )
             )
+
+    async def _maybe_grant_free_trial(self, user: User) -> None:
+        existing_grant = await self.session.scalar(
+            select(AuditLog.id).where(
+                AuditLog.action == 'free_trial_granted',
+                AuditLog.entity_type == 'user',
+                AuditLog.entity_id == str(user.id),
+            ).limit(1)
+        )
+        if existing_grant:
+            return
+
+        if await self.key_repo.count_by_owner(user.id) > 0:
+            return
+
+        settings = await self.access_policy.get_free_trial_settings()
+        if not settings['enabled']:
+            return
+
+        trial_plan = await self.access_policy.ensure_free_trial_plan(settings['days'])
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=settings['days'])
+        key = await self.key_repo.create(owner_id=user.id, display_name='Пробный доступ')
+        subscription = Subscription(
+            vpn_key_id=key.id,
+            plan_id=trial_plan.id,
+            starts_at=now,
+            expires_at=expires_at,
+            status=SubscriptionStatus.ACTIVE,
+        )
+        self.session.add(subscription)
+        await self.session.flush()
+
+        key.current_subscription_id = subscription.id
+        key.status = VPNKeyStatus.ACTIVE
+
+        threexui = ThreeXUIService()
+        try:
+            inbound_ids = await self.access_policy.resolve_plan_inbound_ids(
+                plan_id=None,
+                threexui_service=threexui,
+                fallback_to_free_trial=True,
+            )
+            created = await threexui.create_vpn_client(
+                user=user,
+                key=key,
+                subscription=subscription,
+                version_number=1,
+                inbound_ids=inbound_ids,
+            )
+        finally:
+            await threexui.client.close()
+
+        self.session.add(
+            VPNKeyVersion(
+                vpn_key_id=key.id,
+                version=1,
+                threexui_client_uuid=created.client_uuid,
+                inbound_id=created.inbound_id,
+                email_remark=created.email_remark,
+                connection_uri=created.connection_uri,
+                raw_config=created.raw,
+                is_active=True,
+            )
+        )
+        self.session.add(
+            AuditLog(
+                actor_type='system',
+                actor_id=None,
+                action='free_trial_granted',
+                entity_type='user',
+                entity_id=str(user.id),
+                metadata_json={'days': settings['days'], 'inbound_ids': inbound_ids},
+            )
+        )

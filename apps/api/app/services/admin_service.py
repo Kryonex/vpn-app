@@ -32,6 +32,7 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
 from app.repositories.app_settings_repository import AppSettingsRepository
 from app.services.referral_service import ReferralService
+from app.services.access_policy_service import AccessPolicyService
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class AdminService:
         self.referral_service = ReferralService(session)
         self.threexui_service = threexui_service
         self.app_settings_repo = AppSettingsRepository(session)
+        self.access_policy = AccessPolicyService(session)
 
     async def list_users(self, limit: int = 100, offset: int = 0):
         users = await self.user_repo.list_users(limit=limit, offset=offset)
@@ -110,7 +112,10 @@ class AdminService:
         return result.all()
 
     async def list_plans(self) -> list[Plan]:
-        return await self.plan_repo.list_all()
+        plans = await self.plan_repo.list_all()
+        for plan in plans:
+            setattr(plan, 'inbound_ids', await self.access_policy.get_plan_inbound_ids(plan.id))
+        return plans
 
     async def get_stats(self) -> dict[str, Decimal | int]:
         total_payments = int((await self.session.scalar(select(func.count(Payment.id)))) or 0)
@@ -194,6 +199,30 @@ class AdminService:
             'button_text': normalized_button_text,
             'enabled': bool(normalized_proxy_url),
         }
+
+    async def list_available_inbounds(self) -> list[dict[str, object]]:
+        return await self.access_policy.get_available_inbounds(self.threexui_service)
+
+    async def get_purchase_inbound_settings(self) -> dict[str, object]:
+        return {'inbound_ids': await self.access_policy.get_purchase_inbound_ids()}
+
+    async def set_purchase_inbound_settings(self, inbound_ids: list[int]) -> dict[str, object]:
+        saved = await self.access_policy.set_purchase_inbound_ids(inbound_ids)
+        await self.session.commit()
+        return {'inbound_ids': saved}
+
+    async def get_free_trial_settings(self) -> dict[str, object]:
+        return await self.access_policy.get_free_trial_settings()
+
+    async def set_free_trial_settings(self, *, enabled: bool, days: int, inbound_ids: list[int]) -> dict[str, object]:
+        saved = await self.access_policy.set_free_trial_settings(
+            enabled=enabled,
+            days=days,
+            inbound_ids=inbound_ids,
+        )
+        await self.access_policy.ensure_free_trial_plan(saved['days'])
+        await self.session.commit()
+        return saved
 
     async def lookup_user_by_username(self, username: str) -> dict[str, object] | None:
         normalized_username = username.lstrip('@').strip().lower()
@@ -441,6 +470,7 @@ class AdminService:
         currency: str,
         is_active: bool,
         sort_order: int,
+        inbound_ids: list[int] | None = None,
     ) -> Plan:
         plan = await self.plan_repo.create(
             name=name,
@@ -450,8 +480,10 @@ class AdminService:
             is_active=is_active,
             sort_order=sort_order,
         )
+        await self.access_policy.set_plan_inbound_ids(plan.id, inbound_ids or [])
         await self.session.commit()
         await self.session.refresh(plan)
+        setattr(plan, 'inbound_ids', await self.access_policy.get_plan_inbound_ids(plan.id))
         return plan
 
     async def update_plan(
@@ -464,6 +496,7 @@ class AdminService:
         currency: str | None = None,
         is_active: bool | None = None,
         sort_order: int | None = None,
+        inbound_ids: list[int] | None = None,
     ) -> Plan:
         plan = await self.plan_repo.get_by_id(plan_id)
         if not plan:
@@ -481,9 +514,12 @@ class AdminService:
             plan.is_active = is_active
         if sort_order is not None:
             plan.sort_order = sort_order
+        if inbound_ids is not None:
+            await self.access_policy.set_plan_inbound_ids(plan.id, inbound_ids)
 
         await self.session.commit()
         await self.session.refresh(plan)
+        setattr(plan, 'inbound_ids', await self.access_policy.get_plan_inbound_ids(plan.id))
         return plan
 
     async def revoke_key(self, key_id: UUID, reason: str) -> VPNKey:
@@ -713,6 +749,10 @@ class AdminService:
                     key=key,
                     subscription=current_subscription,
                     version_number=next_version,
+                    inbound_ids=await self.access_policy.resolve_plan_inbound_ids(
+                        plan_id=plan.id,
+                        threexui_service=self.threexui_service,
+                    ),
                 )
                 self.session.add(
                     VPNKeyVersion(

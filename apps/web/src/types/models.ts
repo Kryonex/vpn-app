@@ -6,6 +6,7 @@ export type Plan = {
   currency: string;
   is_active: boolean;
   sort_order: number;
+  inbound_ids: number[];
 };
 
 export type Subscription = {
