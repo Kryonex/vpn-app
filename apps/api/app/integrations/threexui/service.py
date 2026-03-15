@@ -43,8 +43,61 @@ class ThreeXUIService:
         suffix = f'k{str(key.id)[:6]}v{version_number}'
         return self._sanitize_label(f'{identity}_{suffix}')
 
+    def _build_managed_email_remark(self, base_email_remark: str, inbound_id: int, *, primary_inbound_id: int) -> str:
+        if inbound_id == primary_inbound_id:
+            return base_email_remark
+        return self._sanitize_label(f'{base_email_remark}_ib{inbound_id}')
+
+    def _extract_managed_clients(self, version: VPNKeyVersion) -> dict[int, dict[str, str | None]]:
+        raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
+        mapping: dict[int, dict[str, str | None]] = {}
+        raw_entries = raw_config.get('managed_clients')
+        if isinstance(raw_entries, list):
+            for item in raw_entries:
+                if not isinstance(item, dict):
+                    continue
+                inbound_id = item.get('inbound_id')
+                if inbound_id is None or (not isinstance(inbound_id, int) and not str(inbound_id).isdigit()):
+                    continue
+                inbound_id_int = int(inbound_id)
+                mapping[inbound_id_int] = {
+                    'email_remark': str(item.get('email_remark') or version.email_remark or '').strip() or None,
+                    'sub_id': str(item.get('sub_id') or '').strip() or None,
+                }
+
+        if mapping:
+            return mapping
+
+        fallback_sub_id = self._extract_sub_id(version)
+        fallback_inbound_ids = self._extract_managed_inbound_ids(version)
+        primary_inbound_id = fallback_inbound_ids[0] if fallback_inbound_ids else version.inbound_id or 0
+        base_email_remark = version.email_remark or version.threexui_client_uuid
+        for inbound_id in fallback_inbound_ids:
+            mapping[inbound_id] = {
+                'email_remark': self._build_managed_email_remark(
+                    base_email_remark,
+                    inbound_id,
+                    primary_inbound_id=primary_inbound_id,
+                ),
+                'sub_id': fallback_sub_id,
+            }
+        return mapping
+
     def _extract_managed_inbound_ids(self, version: VPNKeyVersion) -> list[int]:
         raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
+        raw_clients = raw_config.get('managed_clients')
+        if isinstance(raw_clients, list):
+            normalized = sorted(
+                {
+                    int(item.get('inbound_id'))
+                    for item in raw_clients
+                    if isinstance(item, dict)
+                    and item.get('inbound_id') is not None
+                    and (isinstance(item.get('inbound_id'), int) or str(item.get('inbound_id')).isdigit())
+                }
+            )
+            if normalized:
+                return normalized
         raw_ids = raw_config.get('managed_inbound_ids')
         if isinstance(raw_ids, list):
             normalized = sorted({int(item) for item in raw_ids if isinstance(item, int) or str(item).isdigit()})
@@ -73,17 +126,22 @@ class ThreeXUIService:
         current_inbound_ids = self._extract_managed_inbound_ids(version)
         sub_id = self._extract_sub_id(version) or uuid.uuid4().hex[:16]
         missing_inbound_ids = [item for item in requested_inbound_ids if item not in current_inbound_ids]
+        managed_clients = self._extract_managed_clients(version)
         source_inbound_id = current_inbound_ids[0] if current_inbound_ids else version.inbound_id
         source_snapshot = None
         source_client_raw: dict[str, object] | None = None
-        actual_email_remark = version.email_remark or version.threexui_client_uuid
+        actual_email_remark = (
+            (managed_clients.get(source_inbound_id or -1) or {}).get('email_remark')
+            or version.email_remark
+            or version.threexui_client_uuid
+        )
         actual_expires_at = expires_at
 
         if source_inbound_id is not None:
             source_snapshot = await self.client.get_client_snapshot(
                 inbound_id=source_inbound_id,
                 client_uuid=version.threexui_client_uuid,
-                email_remark=version.email_remark,
+                email_remark=str(actual_email_remark),
                 fallback_sub_id=sub_id,
             )
         if source_snapshot:
@@ -92,31 +150,47 @@ class ThreeXUIService:
             sub_id = source_snapshot.sub_id or sub_id
             raw = source_snapshot.raw if isinstance(source_snapshot.raw, dict) else {}
             source_client_raw = raw.get('client') if isinstance(raw.get('client'), dict) else None
+            managed_clients[source_inbound_id or version.inbound_id or 0] = {
+                'email_remark': actual_email_remark,
+                'sub_id': sub_id,
+            }
 
         changed = False
         for inbound_id in missing_inbound_ids:
+            target_email_remark = (
+                (managed_clients.get(inbound_id) or {}).get('email_remark')
+                or self._build_managed_email_remark(str(actual_email_remark), inbound_id, primary_inbound_id=source_inbound_id or requested_inbound_ids[0])
+            )
             existing_snapshot = await self.client.get_client_snapshot(
                 inbound_id=inbound_id,
                 client_uuid=version.threexui_client_uuid,
-                email_remark=actual_email_remark,
+                email_remark=str(target_email_remark),
                 fallback_sub_id=sub_id,
             )
             if existing_snapshot:
                 if not version.connection_uri and existing_snapshot.connection_uri:
                     version.connection_uri = existing_snapshot.connection_uri
                     changed = True
+                managed_clients[inbound_id] = {
+                    'email_remark': existing_snapshot.email_remark or str(target_email_remark),
+                    'sub_id': existing_snapshot.sub_id or sub_id,
+                }
                 continue
 
             created = await self.client.add_client(
                 inbound_id=inbound_id,
                 client_uuid=version.threexui_client_uuid,
-                email_remark=actual_email_remark,
+                email_remark=str(target_email_remark),
                 expires_at=actual_expires_at,
                 sub_id=sub_id,
                 template_client=source_client_raw,
             )
             if not version.connection_uri and created.connection_uri:
                 version.connection_uri = created.connection_uri
+            managed_clients[inbound_id] = {
+                'email_remark': str(target_email_remark),
+                'sub_id': sub_id,
+            }
             changed = True
             logger.info(
                 '3x-ui inbound sync added client_uuid=%s into inbound_id=%s from source_inbound_id=%s',
@@ -132,6 +206,17 @@ class ThreeXUIService:
             changed = True
         if raw_config.get('sub_id') != sub_id:
             raw_config['sub_id'] = sub_id
+            changed = True
+        managed_clients_payload = [
+            {
+                'inbound_id': inbound_id,
+                'email_remark': (managed_clients.get(inbound_id) or {}).get('email_remark') or version.email_remark,
+                'sub_id': (managed_clients.get(inbound_id) or {}).get('sub_id') or sub_id,
+            }
+            for inbound_id in merged_inbound_ids
+        ]
+        if raw_config.get('managed_clients') != managed_clients_payload:
+            raw_config['managed_clients'] = managed_clients_payload
             changed = True
         if changed:
             version.raw_config = raw_config
@@ -159,23 +244,40 @@ class ThreeXUIService:
 
         client_uuid = str(uuid.uuid4())
         sub_id = uuid.uuid4().hex[:16]
+        primary_inbound_id = target_inbound_ids[0]
+        managed_clients_payload: list[dict[str, object]] = []
         created = await self.client.add_client(
-            inbound_id=target_inbound_ids[0],
+            inbound_id=primary_inbound_id,
             client_uuid=client_uuid,
             email_remark=remark,
             expires_at=subscription.expires_at,
             sub_id=sub_id,
         )
+        managed_clients_payload.append(
+            {
+                'inbound_id': primary_inbound_id,
+                'email_remark': remark,
+                'sub_id': sub_id,
+            }
+        )
         additional_payloads: list[dict[str, object]] = []
         for inbound_id in target_inbound_ids[1:]:
+            extra_email_remark = self._build_managed_email_remark(remark, inbound_id, primary_inbound_id=primary_inbound_id)
             extra = await self.client.add_client(
                 inbound_id=inbound_id,
                 client_uuid=client_uuid,
-                email_remark=remark,
+                email_remark=extra_email_remark,
                 expires_at=subscription.expires_at,
                 sub_id=sub_id,
             )
-            additional_payloads.append({'inbound_id': inbound_id, 'raw': extra.raw})
+            additional_payloads.append({'inbound_id': inbound_id, 'email_remark': extra_email_remark, 'raw': extra.raw})
+            managed_clients_payload.append(
+                {
+                    'inbound_id': inbound_id,
+                    'email_remark': extra_email_remark,
+                    'sub_id': sub_id,
+                }
+            )
 
         created.managed_inbound_ids = target_inbound_ids
         created.sub_id = sub_id
@@ -183,6 +285,7 @@ class ThreeXUIService:
             'primary': created.raw,
             'additional': additional_payloads,
             'managed_inbound_ids': target_inbound_ids,
+            'managed_clients': managed_clients_payload,
             'sub_id': sub_id,
         }
         if not created.connection_uri:
@@ -203,11 +306,12 @@ class ThreeXUIService:
             return version.connection_uri
 
         sub_id = self._extract_sub_id(version)
+        managed_clients = self._extract_managed_clients(version)
         for inbound_id in managed_inbound_ids:
             await self.client.update_client_expiry(
                 inbound_id=inbound_id,
                 client_uuid=version.threexui_client_uuid,
-                email_remark=version.email_remark or version.threexui_client_uuid,
+                email_remark=str((managed_clients.get(inbound_id) or {}).get('email_remark') or version.email_remark or version.threexui_client_uuid),
                 expires_at=new_expiry,
                 sub_id=sub_id,
             )
@@ -225,11 +329,12 @@ class ThreeXUIService:
         if not managed_inbound_ids:
             managed_inbound_ids = [version.inbound_id] if version.inbound_id is not None else []
 
+        managed_clients = self._extract_managed_clients(version)
         for inbound_id in managed_inbound_ids:
             await self.client.delete_client(
                 version.threexui_client_uuid,
                 inbound_id=inbound_id,
-                email_remark=version.email_remark,
+                email_remark=str((managed_clients.get(inbound_id) or {}).get('email_remark') or version.email_remark or version.threexui_client_uuid),
             )
 
     async def rotate_vpn_client(
@@ -260,6 +365,7 @@ class ThreeXUIService:
         for version in candidate_versions:
 
             managed_inbound_ids = self._extract_managed_inbound_ids(version)
+            managed_clients = self._extract_managed_clients(version)
             sub_id = self._extract_sub_id(version)
             snapshots: list[ThreeXUIPanelClientSnapshot] = []
             missing_inbound = False
@@ -268,7 +374,7 @@ class ThreeXUIService:
                 snapshot = await self.client.get_client_snapshot(
                     inbound_id=inbound_id,
                     client_uuid=version.threexui_client_uuid,
-                    email_remark=version.email_remark,
+                    email_remark=str((managed_clients.get(inbound_id) or {}).get('email_remark') or version.email_remark or version.threexui_client_uuid),
                     fallback_sub_id=sub_id,
                 )
                 if not snapshot:
@@ -310,6 +416,18 @@ class ThreeXUIService:
             resolved_sub_id = snapshot.sub_id or sub_id
             if resolved_sub_id and raw_config.get('sub_id') != resolved_sub_id:
                 raw_config['sub_id'] = resolved_sub_id
+                changed = True
+            actual_managed_clients = [
+                {
+                    'inbound_id': item.inbound_id,
+                    'email_remark': item.email_remark or version.email_remark,
+                    'sub_id': item.sub_id or resolved_sub_id,
+                }
+                for item in snapshots
+                if item.inbound_id is not None
+            ]
+            if raw_config.get('managed_clients') != actual_managed_clients:
+                raw_config['managed_clients'] = actual_managed_clients
                 changed = True
             if changed:
                 version.raw_config = raw_config

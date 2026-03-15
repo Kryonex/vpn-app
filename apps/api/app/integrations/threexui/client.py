@@ -518,7 +518,10 @@ class ThreeXUIClient:
             'tgId': str(template.get('tgId', '') or ''),
             'subId': sub_id,
         }
-        for optional_key in ('flow', 'comment', 'reset', 'telegramId'):
+        # Copy only transport-agnostic fields. Fields like `flow` are protocol-specific
+        # and can make cross-inbound cloning silently fail when the target inbound uses
+        # different stream/security settings.
+        for optional_key in ('comment',):
             value = template.get(optional_key)
             if value not in (None, ''):
                 client_payload[optional_key] = value
