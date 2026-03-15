@@ -99,7 +99,6 @@ async def _sync_panel_clients() -> None:
         try:
             stmt = (
                 select(VPNKey)
-                .where(VPNKey.status.in_([VPNKeyStatus.ACTIVE, VPNKeyStatus.PENDING_PAYMENT]))
                 .options(
                     selectinload(VPNKey.current_subscription),
                     selectinload(VPNKey.versions),

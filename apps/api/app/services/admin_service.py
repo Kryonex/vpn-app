@@ -55,6 +55,36 @@ class AdminService:
         items: list[dict[str, object]] = []
         for user in users:
             account = user.telegram_account
+            trial_filters = [
+                (
+                    (AuditLog.entity_type == 'user')
+                    & (AuditLog.entity_id == str(user.id))
+                )
+            ]
+            if account and account.telegram_user_id is not None:
+                trial_filters.append(AuditLog.metadata_json['telegram_user_id'].astext == str(account.telegram_user_id))
+
+            has_used_free_trial = bool(
+                await self.session.scalar(
+                    select(AuditLog.id).where(
+                        AuditLog.action == 'free_trial_granted',
+                        or_(*trial_filters),
+                    ).limit(1)
+                )
+            )
+            has_active_free_trial = bool(
+                await self.session.scalar(
+                    select(Subscription.id)
+                    .join(VPNKey, VPNKey.id == Subscription.vpn_key_id)
+                    .join(Plan, Plan.id == Subscription.plan_id)
+                    .where(
+                        VPNKey.owner_id == user.id,
+                        Subscription.status == SubscriptionStatus.ACTIVE,
+                        Plan.name == self.access_policy.FREE_TRIAL_PLAN_NAME,
+                    )
+                    .limit(1)
+                )
+            )
             items.append(
                 {
                     'id': user.id,
@@ -64,6 +94,8 @@ class AdminService:
                     'telegram_username': account.username if account else None,
                     'telegram_user_id': account.telegram_user_id if account else None,
                     'total_keys_count': len(user.vpn_keys),
+                    'has_used_free_trial': has_used_free_trial,
+                    'has_active_free_trial': has_active_free_trial,
                 }
             )
         return items
@@ -795,6 +827,41 @@ class AdminService:
             'deleted_keys_count': int(deleted_keys_count),
             'deleted_payments_count': int(deleted_payments_count),
             'deleted_referrals_count': int(deleted_referrals_count),
+        }
+
+    async def reset_user_free_trial(self, user_id: UUID) -> dict[str, object]:
+        user = await self.session.scalar(
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.telegram_account))
+        )
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+        filters = [
+            (
+                (AuditLog.entity_type == 'user')
+                & (AuditLog.entity_id == str(user.id))
+            )
+        ]
+        if user.telegram_account and user.telegram_account.telegram_user_id is not None:
+            filters.append(
+                AuditLog.metadata_json['telegram_user_id'].astext == str(user.telegram_account.telegram_user_id)
+            )
+
+        deleted_logs_count = (
+            await self.session.execute(
+                delete(AuditLog).where(
+                    AuditLog.action == 'free_trial_granted',
+                    or_(*filters),
+                )
+            )
+        ).rowcount or 0
+        await self.session.commit()
+        return {
+            'ok': True,
+            'user_id': user.id,
+            'deleted_logs_count': int(deleted_logs_count),
         }
 
     async def add_bonus_days(self, user_id: UUID, days: int, reason: str) -> None:

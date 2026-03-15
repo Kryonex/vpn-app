@@ -417,18 +417,25 @@ class ThreeXUIClient:
         email_remark: str,
         expires_at: datetime,
         sub_id: str,
+        *,
+        template_client: dict[str, Any] | None = None,
     ) -> ThreeXUICreatedClient:
         expiry_ms = int(expires_at.astimezone(timezone.utc).timestamp() * 1000)
+        template = template_client if isinstance(template_client, dict) else {}
         client_payload = {
             'id': client_uuid,
             'email': email_remark,
-            'enable': True,
+            'enable': bool(template.get('enable', True)),
             'expiryTime': expiry_ms,
-            'limitIp': 0,
-            'totalGB': 0,
-            'tgId': '',
+            'limitIp': int(template.get('limitIp', 0) or 0),
+            'totalGB': int(template.get('totalGB', 0) or 0),
+            'tgId': str(template.get('tgId', '') or ''),
             'subId': sub_id,
         }
+        for optional_key in ('flow', 'comment', 'reset', 'telegramId'):
+            value = template.get(optional_key)
+            if value not in (None, ''):
+                client_payload[optional_key] = value
 
         payload_primary = {'id': inbound_id, 'settings': json.dumps({'clients': [client_payload]})}
         payload_fallback = {'inboundId': inbound_id, 'clients': [client_payload]}

@@ -12,7 +12,17 @@ import { useAuth } from '../context/AuthContext';
 import type { Payment, Plan, SystemStatus, VPNKey } from '../types/models';
 
 type AdminStats = { total_payments: number; succeeded_payments: number; pending_payments: number; failed_payments: number; total_revenue: string; month_revenue: string };
-type AdminUser = { id: string; referral_code: string; bonus_days_balance: number; created_at: string; telegram_username: string | null; telegram_user_id: number | null; total_keys_count: number };
+type AdminUser = {
+  id: string;
+  referral_code: string;
+  bonus_days_balance: number;
+  created_at: string;
+  telegram_username: string | null;
+  telegram_user_id: number | null;
+  total_keys_count: number;
+  has_used_free_trial: boolean;
+  has_active_free_trial: boolean;
+};
 type AdminReferral = { id: string; referrer_user_id: string; referred_user_id: string; status: string; created_at: string };
 type AdminSubscription = { id: string; vpn_key_id: string; plan_id: string; starts_at: string; expires_at: string; status: string };
 type AdminPaymentsList = { items: Payment[] };
@@ -269,6 +279,8 @@ export function AdminPage() {
     if (!q) return users;
     return users.filter((user) => [userLabel(user), user.id, user.referral_code].some((value) => value.toLowerCase().includes(q)));
   }, [search, users]);
+  const trialUsers = useMemo(() => filteredUsers.filter((user) => user.has_active_free_trial), [filteredUsers]);
+  const regularUsers = useMemo(() => filteredUsers.filter((user) => !user.has_active_free_trial), [filteredUsers]);
 
   const afterAction = async (text: string) => { setMessage(text); await load(); await refreshSystemStatus(); };
   const updatePlanDraft = (id: string, field: keyof Plan, value: string | number | boolean | number[]) => setPlanDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
@@ -307,6 +319,73 @@ export function AdminPage() {
       );
     });
   };
+
+  const resetFreeTrial = async (user: AdminUser) => {
+    await run(async () => {
+      const result = await apiRequest<{ ok: boolean; deleted_logs_count: number }>(`/admin/users/${user.id}/reset-free-trial`, {
+        method: 'POST',
+      });
+      await afterAction(`Счётчик пробного периода сброшен. Удалено записей: ${result.deleted_logs_count}.`);
+    });
+  };
+
+  const renderUserCards = (list: AdminUser[]) => (
+    <div className="admin-list">
+      {list.map((user) => {
+        const expanded = Boolean(expandedUsers[user.id]);
+        const userKeys = keysByOwner[user.id] ?? [];
+        const userPayments = paymentsByUser[user.id] ?? [];
+        const userReferrals = referralsByReferrer[user.id] ?? [];
+        return (
+          <article className={`admin-user-card${user.has_active_free_trial ? ' admin-user-card--trial' : ''}`} key={user.id}>
+            <button className="admin-user-header" onClick={() => setExpandedUsers((prev) => ({ ...prev, [user.id]: !prev[user.id] }))}>
+              <div>
+                <p className="title-line">{userLabel(user)}</p>
+                <p className="muted">Ключей: {user.total_keys_count} · Бонус: {user.bonus_days_balance} · Рефералов: {userReferrals.length} · Платежей: {userPayments.length}</p>
+              </div>
+              {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+            {expanded && (
+              <div className="admin-user-body">
+                <div className="chip-row">
+                  <span className="chip">UUID: {user.id.slice(0, 8)}...</span>
+                  <span className="chip">Referral: {user.referral_code}</span>
+                  {user.has_active_free_trial && <span className="chip chip-danger">Активный trial</span>}
+                  {!user.has_active_free_trial && user.has_used_free_trial && <span className="chip chip-danger">Trial использован</span>}
+                </div>
+                {userKeys.map((key) => (
+                  <div className="admin-subitem" key={key.id}>
+                    <div className="row-between">
+                      <div>
+                        <p className="title-line">{key.display_name}</p>
+                        <p className="muted">{subscriptionsByKey[key.id] ? `Истекает ${new Date(subscriptionsByKey[key.id].expires_at).toLocaleDateString()}` : 'Подписка не найдена'}</p>
+                      </div>
+                      <StatusBadge status={key.status} />
+                    </div>
+                    <div className="admin-actions">
+                      <button className="btn btn-ghost" onClick={() => setSendUserId(user.id)}>Сообщение</button>
+                      <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/keys/${key.id}/revoke`, { method: 'POST', body: JSON.stringify({ reason: 'manual_revoke' }) }); await afterAction('Ключ отозван.'); })}>Отозвать</button>
+                      <button className="btn btn-danger-soft" onClick={() => void run(async () => { await apiRequest(`/admin/keys/${key.id}`, { method: 'DELETE', body: JSON.stringify({ reason: 'admin_delete_from_history' }) }); await afterAction('Ключ удалён из истории.'); })}>Удалить</button>
+                    </div>
+                  </div>
+                ))}
+                {!userKeys.length && <p className="muted">У пользователя пока нет ключей.</p>}
+                <p className="muted">Удаление пользователя стирает его аккаунт, ключи, платежи и связанные записи без возможности восстановления.</p>
+                <div className="admin-actions">
+                  <button className="btn btn-ghost" onClick={() => void resetFreeTrial(user)}>
+                    Сбросить trial
+                  </button>
+                  <button className="btn btn-danger-soft" onClick={() => void deleteUser(user)}>
+                    <Trash2 size={16} /> Удалить пользователя
+                  </button>
+                </div>
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
 
   const handleMessageImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -669,56 +748,14 @@ export function AdminPage() {
 
       <FoldableSection title="Клиенты" subtitle="Раскрывающиеся карточки пользователей, ключей и быстрых действий" icon={<UserRound size={16} />}>
         <label className="field"><span className="field-label">Поиск</span><input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="@username, user_id, referral code" /></label>
-        <div className="admin-list">
-          {filteredUsers.map((user) => {
-            const expanded = Boolean(expandedUsers[user.id]);
-            const userKeys = keysByOwner[user.id] ?? [];
-            const userPayments = paymentsByUser[user.id] ?? [];
-            const userReferrals = referralsByReferrer[user.id] ?? [];
-            return (
-              <article className="admin-user-card" key={user.id}>
-                <button className="admin-user-header" onClick={() => setExpandedUsers((prev) => ({ ...prev, [user.id]: !prev[user.id] }))}>
-                  <div>
-                    <p className="title-line">{userLabel(user)}</p>
-                    <p className="muted">Ключей: {user.total_keys_count} · Бонус: {user.bonus_days_balance} · Рефералов: {userReferrals.length} · Платежей: {userPayments.length}</p>
-                  </div>
-                  {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
-                {expanded && (
-                  <div className="admin-user-body">
-                    <div className="chip-row">
-                      <span className="chip">UUID: {user.id.slice(0, 8)}...</span>
-                      <span className="chip">Referral: {user.referral_code}</span>
-                    </div>
-                    {userKeys.map((key) => (
-                      <div className="admin-subitem" key={key.id}>
-                        <div className="row-between">
-                          <div>
-                            <p className="title-line">{key.display_name}</p>
-                            <p className="muted">{subscriptionsByKey[key.id] ? `Истекает ${new Date(subscriptionsByKey[key.id].expires_at).toLocaleDateString()}` : 'Подписка не найдена'}</p>
-                          </div>
-                          <StatusBadge status={key.status} />
-                        </div>
-                        <div className="admin-actions">
-                          <button className="btn btn-ghost" onClick={() => setSendUserId(user.id)}>Сообщение</button>
-                          <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/keys/${key.id}/revoke`, { method: 'POST', body: JSON.stringify({ reason: 'manual_revoke' }) }); await afterAction('Ключ отозван.'); })}>Отозвать</button>
-                          <button className="btn btn-danger-soft" onClick={() => void run(async () => { await apiRequest(`/admin/keys/${key.id}`, { method: 'DELETE', body: JSON.stringify({ reason: 'admin_delete_from_history' }) }); await afterAction('Ключ удалён из истории.'); })}>Удалить</button>
-                        </div>
-                      </div>
-                    ))}
-                    {!userKeys.length && <p className="muted">У пользователя пока нет ключей.</p>}
-                    <p className="muted">Удаление пользователя стирает его аккаунт, ключи, платежи и связанные записи без возможности восстановления.</p>
-                    <div className="admin-actions">
-                      <button className="btn btn-danger-soft" onClick={() => void deleteUser(user)}>
-                        <Trash2 size={16} /> Удалить пользователя
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
+        {trialUsers.length > 0 && (
+          <>
+            <div className="admin-note admin-note-danger">Пользователи с активным пробным доступом</div>
+            {renderUserCards(trialUsers)}
+            <div className="divider" />
+          </>
+        )}
+        {renderUserCards(regularUsers)}
       </FoldableSection>
 
       <div className="admin-grid">

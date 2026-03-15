@@ -19,6 +19,8 @@ class AdminUserOut(BaseSchema):
     telegram_username: str | None = None
     telegram_user_id: int | None = None
     total_keys_count: int = 0
+    has_used_free_trial: bool = False
+    has_active_free_trial: bool = False
 
 
 class AdminKeyOut(BaseSchema):
@@ -158,4 +160,10 @@ class AdminDeleteUserResponse(BaseModel):
     deleted_keys_count: int
     deleted_payments_count: int
     deleted_referrals_count: int
+
+
+class AdminResetFreeTrialResponse(BaseModel):
+    ok: bool
+    user_id: UUID
+    deleted_logs_count: int
 

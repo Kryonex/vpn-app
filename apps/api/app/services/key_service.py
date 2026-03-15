@@ -102,6 +102,8 @@ class KeyService:
         if not key:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Key not found')
 
+        await self.threexui_service.sync_key_with_panel_state(key)
+
         if key.status == VPNKeyStatus.ACTIVE and any(item.is_active for item in key.versions):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

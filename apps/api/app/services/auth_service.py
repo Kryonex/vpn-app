@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, validate_telegram_init_data
@@ -92,6 +92,13 @@ class AuthService:
         await self.session.commit()
         await self.session.refresh(user)
         return user
+
+    @staticmethod
+    def _trial_telegram_id(user: User) -> int | None:
+        account = user.telegram_account
+        if not account or account.telegram_user_id is None:
+            return None
+        return int(account.telegram_user_id)
 
     async def get_free_trial_status(self, user: User) -> dict[str, Any]:
         settings = await self.access_policy.get_free_trial_settings()
@@ -216,11 +223,20 @@ class AuthService:
             )
 
     async def _has_free_trial_grant(self, user: User) -> bool:
+        filters = [
+            (
+                (AuditLog.entity_type == 'user')
+                & (AuditLog.entity_id == str(user.id))
+            )
+        ]
+        telegram_user_id = self._trial_telegram_id(user)
+        if telegram_user_id is not None:
+            filters.append(AuditLog.metadata_json['telegram_user_id'].astext == str(telegram_user_id))
+
         existing_grant = await self.session.scalar(
             select(AuditLog.id).where(
                 AuditLog.action == 'free_trial_granted',
-                AuditLog.entity_type == 'user',
-                AuditLog.entity_id == str(user.id),
+                or_(*filters),
             ).limit(1)
         )
         return existing_grant is not None
@@ -281,7 +297,11 @@ class AuthService:
                 action='free_trial_granted',
                 entity_type='user',
                 entity_id=str(user.id),
-                metadata_json={'days': settings['days'], 'inbound_ids': inbound_ids},
+                metadata_json={
+                    'days': settings['days'],
+                    'inbound_ids': inbound_ids,
+                    'telegram_user_id': self._trial_telegram_id(user),
+                },
             )
         )
         await self.session.flush()

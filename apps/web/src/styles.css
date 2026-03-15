@@ -464,6 +464,13 @@ h1 {
   border-color: rgba(239, 68, 68, 0.2);
 }
 
+.chip-danger,
+.admin-note-danger {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
 .input,
 .textarea,
 select.input {
@@ -748,6 +755,11 @@ select.input:focus {
 
 .admin-user-card {
   overflow: hidden;
+}
+
+.admin-user-card--trial {
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 20px 48px rgba(127, 29, 29, 0.2);
 }
 
 .admin-user-header {

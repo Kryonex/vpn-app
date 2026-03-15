@@ -73,15 +73,47 @@ class ThreeXUIService:
         current_inbound_ids = self._extract_managed_inbound_ids(version)
         sub_id = self._extract_sub_id(version) or uuid.uuid4().hex[:16]
         missing_inbound_ids = [item for item in requested_inbound_ids if item not in current_inbound_ids]
+        source_inbound_id = current_inbound_ids[0] if current_inbound_ids else version.inbound_id
+        source_snapshot = None
+        source_client_raw: dict[str, object] | None = None
+        actual_email_remark = version.email_remark or version.threexui_client_uuid
+        actual_expires_at = expires_at
+
+        if source_inbound_id is not None:
+            source_snapshot = await self.client.get_client_snapshot(
+                inbound_id=source_inbound_id,
+                client_uuid=version.threexui_client_uuid,
+                email_remark=version.email_remark,
+                fallback_sub_id=sub_id,
+            )
+        if source_snapshot:
+            actual_email_remark = source_snapshot.email_remark or actual_email_remark
+            actual_expires_at = source_snapshot.expires_at or actual_expires_at
+            sub_id = source_snapshot.sub_id or sub_id
+            raw = source_snapshot.raw if isinstance(source_snapshot.raw, dict) else {}
+            source_client_raw = raw.get('client') if isinstance(raw.get('client'), dict) else None
 
         changed = False
         for inbound_id in missing_inbound_ids:
+            existing_snapshot = await self.client.get_client_snapshot(
+                inbound_id=inbound_id,
+                client_uuid=version.threexui_client_uuid,
+                email_remark=actual_email_remark,
+                fallback_sub_id=sub_id,
+            )
+            if existing_snapshot:
+                if not version.connection_uri and existing_snapshot.connection_uri:
+                    version.connection_uri = existing_snapshot.connection_uri
+                    changed = True
+                continue
+
             created = await self.client.add_client(
                 inbound_id=inbound_id,
                 client_uuid=version.threexui_client_uuid,
-                email_remark=version.email_remark or version.threexui_client_uuid,
-                expires_at=expires_at,
+                email_remark=actual_email_remark,
+                expires_at=actual_expires_at,
                 sub_id=sub_id,
+                template_client=source_client_raw,
             )
             if not version.connection_uri and created.connection_uri:
                 version.connection_uri = created.connection_uri
@@ -97,6 +129,7 @@ class ThreeXUIService:
             changed = True
         if changed:
             version.raw_config = raw_config
+            version.email_remark = actual_email_remark
         return changed
 
     async def create_vpn_client(
@@ -214,10 +247,11 @@ class ThreeXUIService:
     async def sync_key_with_panel_state(self, key: VPNKey) -> bool:
         changed = False
         now = datetime.now(timezone.utc)
+        candidate_versions = [item for item in key.versions if item.is_active]
+        if not candidate_versions and key.versions:
+            candidate_versions = [max(key.versions, key=lambda item: item.version)]
 
-        for version in key.versions:
-            if not version.is_active:
-                continue
+        for version in candidate_versions:
 
             managed_inbound_ids = self._extract_managed_inbound_ids(version)
             sub_id = self._extract_sub_id(version)
@@ -244,6 +278,11 @@ class ThreeXUIService:
                 continue
 
             snapshot = snapshots[0]
+            panel_expires_at = min(
+                (item.expires_at for item in snapshots if item.expires_at is not None),
+                default=None,
+            )
+            panel_enabled = all(item.is_active is not False for item in snapshots)
 
             if snapshot.connection_uri and snapshot.connection_uri != version.connection_uri:
                 version.connection_uri = snapshot.connection_uri
@@ -258,11 +297,55 @@ class ThreeXUIService:
                 changed = True
 
             raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
-            if raw_config.get('managed_inbound_ids') != managed_inbound_ids:
-                raw_config['managed_inbound_ids'] = managed_inbound_ids
-                if sub_id:
-                    raw_config['sub_id'] = sub_id
+            actual_managed_inbound_ids = sorted({item.inbound_id for item in snapshots if item.inbound_id is not None})
+            if raw_config.get('managed_inbound_ids') != actual_managed_inbound_ids:
+                raw_config['managed_inbound_ids'] = actual_managed_inbound_ids
+                changed = True
+            resolved_sub_id = snapshot.sub_id or sub_id
+            if resolved_sub_id and raw_config.get('sub_id') != resolved_sub_id:
+                raw_config['sub_id'] = resolved_sub_id
+                changed = True
+            if changed:
                 version.raw_config = raw_config
+
+            if key.current_subscription and panel_expires_at and key.current_subscription.expires_at != panel_expires_at:
+                key.current_subscription.expires_at = panel_expires_at
+                changed = True
+
+            if not panel_enabled:
+                if version.is_active:
+                    version.is_active = False
+                    version.revoked_at = version.revoked_at or now
+                    changed = True
+                if key.current_subscription and key.current_subscription.status != SubscriptionStatus.REVOKED:
+                    key.current_subscription.status = SubscriptionStatus.REVOKED
+                    changed = True
+                if key.status != VPNKeyStatus.REVOKED:
+                    key.status = VPNKeyStatus.REVOKED
+                    changed = True
+                continue
+
+            if panel_expires_at and panel_expires_at <= now:
+                if version.is_active:
+                    version.is_active = False
+                    changed = True
+                if key.current_subscription and key.current_subscription.status != SubscriptionStatus.EXPIRED:
+                    key.current_subscription.status = SubscriptionStatus.EXPIRED
+                    changed = True
+                if key.status != VPNKeyStatus.EXPIRED:
+                    key.status = VPNKeyStatus.EXPIRED
+                    changed = True
+                continue
+
+            if not version.is_active:
+                version.is_active = True
+                version.revoked_at = None
+                changed = True
+            if key.current_subscription and key.current_subscription.status != SubscriptionStatus.ACTIVE:
+                key.current_subscription.status = SubscriptionStatus.ACTIVE
+                changed = True
+            if key.status != VPNKeyStatus.ACTIVE:
+                key.status = VPNKeyStatus.ACTIVE
                 changed = True
 
         has_active_version = any(item.is_active for item in key.versions)

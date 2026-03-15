@@ -18,6 +18,7 @@ from app.schemas.admin import (
     AdminBindPanelKeyRequest,
     AdminBindPanelKeyResponse,
     AdminDeleteKeyRequest,
+    AdminResetFreeTrialResponse,
     AdminDeleteUserRequest,
     AdminDeleteUserResponse,
     AdminGrantSubscriptionRequest,
@@ -537,3 +538,14 @@ async def admin_delete_user(
     service = AdminService(session, threexui_service)
     result = await service.delete_user_with_related_data(user_id=user_id, reason=payload.reason)
     return AdminDeleteUserResponse(**result)
+
+
+@router.post('/users/{user_id}/reset-free-trial', response_model=AdminResetFreeTrialResponse)
+async def admin_reset_free_trial(
+    user_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    result = await service.reset_user_free_trial(user_id)
+    return AdminResetFreeTrialResponse(**result)
