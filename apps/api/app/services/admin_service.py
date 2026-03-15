@@ -618,12 +618,20 @@ class AdminService:
             if not active_version:
                 continue
 
-            if await self.threexui_service.ensure_version_inbounds(
-                active_version,
-                expires_at=key.current_subscription.expires_at,
-                inbound_ids=target_inbound_ids,
-            ):
-                synced += 1
+            try:
+                if await self.threexui_service.ensure_version_inbounds(
+                    active_version,
+                    expires_at=key.current_subscription.expires_at,
+                    inbound_ids=target_inbound_ids,
+                ):
+                    synced += 1
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    'Purchase inbound sync failed for key_id=%s version_id=%s target_inbounds=%s',
+                    key.id,
+                    active_version.id,
+                    target_inbound_ids,
+                )
 
         for plan_id_str in inherited_plan_ids_to_update:
             await self.access_policy.set_plan_inbound_ids(UUID(plan_id_str), normalized_target)
@@ -657,12 +665,20 @@ class AdminService:
             active_version = next((item for item in key.versions if item.is_active), None)
             if not active_version:
                 continue
-            if await self.threexui_service.ensure_version_inbounds(
-                active_version,
-                expires_at=key.current_subscription.expires_at,
-                inbound_ids=inbound_ids,
-            ):
-                synced += 1
+            try:
+                if await self.threexui_service.ensure_version_inbounds(
+                    active_version,
+                    expires_at=key.current_subscription.expires_at,
+                    inbound_ids=inbound_ids,
+                ):
+                    synced += 1
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    'Plan inbound sync failed for key_id=%s version_id=%s target_inbounds=%s',
+                    key.id,
+                    active_version.id,
+                    inbound_ids,
+                )
         return synced
 
     async def revoke_key(self, key_id: UUID, reason: str) -> VPNKey:

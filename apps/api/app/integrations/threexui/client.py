@@ -298,6 +298,7 @@ class ThreeXUIClient:
         clients = settings_obj.get('clients')
         if not isinstance(clients, list):
             clients = []
+        original_count = len(clients)
 
         updated_clients: list[dict[str, Any]] = []
         replaced = False
@@ -349,6 +350,13 @@ class ThreeXUIClient:
                 f'/xui/API/inbounds/update/{inbound_id}',
             ],
             json=payload,
+        )
+        logger.info(
+            '3x-ui inbound update fallback applied for inbound_id=%s clients_before=%s clients_after=%s client_uuid=%s',
+            inbound_id,
+            original_count,
+            len(updated_clients),
+            target_id,
         )
 
     @staticmethod
@@ -425,20 +433,23 @@ class ThreeXUIClient:
                     raw={'inbound': inbound, 'client': client},
                 )
 
-        info = await self.get_client_info(client_uuid)
-        if info:
-            connection_uri = self._extract_connection_uri(info)
-            if connection_uri:
-                return ThreeXUIPanelClientSnapshot(
-                    client_uuid=client_uuid,
-                    inbound_id=inbound_id,
-                    email_remark=email_remark,
-                    sub_id=fallback_sub_id,
-                    expires_at=None,
-                    is_active=None,
-                    connection_uri=connection_uri,
-                    raw={'traffic': info},
-                )
+        # Global traffic lookup is not a proof that the client exists inside a specific inbound.
+        # Only use this fallback when inbound_id is unknown and we are looking for any matching panel record.
+        if inbound_id is None:
+            info = await self.get_client_info(client_uuid)
+            if info:
+                connection_uri = self._extract_connection_uri(info)
+                if connection_uri:
+                    return ThreeXUIPanelClientSnapshot(
+                        client_uuid=client_uuid,
+                        inbound_id=inbound_id,
+                        email_remark=email_remark,
+                        sub_id=fallback_sub_id,
+                        expires_at=None,
+                        is_active=None,
+                        connection_uri=connection_uri,
+                        raw={'traffic': info},
+                    )
 
         return None
 
@@ -560,6 +571,9 @@ class ThreeXUIClient:
                 if snapshot:
                     break
                 await asyncio.sleep(0.35)
+
+        if not snapshot:
+            raise RuntimeError(f'3x-ui client {client_uuid} was not found in inbound {inbound_id} after add/update')
 
         connection_uri = snapshot.connection_uri if snapshot else self._build_subscription_url(sub_id, client_uuid)
 
