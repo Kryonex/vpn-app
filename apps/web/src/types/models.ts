@@ -79,6 +79,11 @@ export type SystemStatus = {
   updated_at: string | null;
 };
 
+export type PaymentSettings = {
+  enabled: boolean;
+  mode: 'direct' | 'admin_contact' | string;
+};
+
 export type ReferralMe = {
   referral_code: string;
   referral_link: string;

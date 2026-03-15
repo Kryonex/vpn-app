@@ -9,13 +9,14 @@ import { BuyPlanPage } from './pages/BuyPlanPage';
 import { HomePage } from './pages/HomePage';
 import { KeyDetailsPage } from './pages/KeyDetailsPage';
 import { KeysPage } from './pages/KeysPage';
+import { NewsPage } from './pages/NewsPage';
 import { RenewKeyPage } from './pages/RenewKeyPage';
 
 export default function App() {
   const { isLoading, isAuthenticated, isAdmin, error } = useAuth();
 
   const shell = (content: ReactNode, withNav = false) => (
-    <div className="app-frame">
+    <div className="app-frame zero-frame">
       <div className="bg-layer bg-layer-a" />
       <div className="bg-layer bg-layer-b" />
       <div className="bg-grid" />
@@ -28,7 +29,7 @@ export default function App() {
   );
 
   if (isLoading) {
-    return shell(<LoadingState text="Загружаем ваш кабинет..." />);
+    return shell(<LoadingState text="Подготавливаем ZERO..." />);
   }
 
   if (!isAuthenticated) {
@@ -44,10 +45,11 @@ export default function App() {
     <>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/buy" element={<BuyPlanPage />} />
+        <Route path="/news" element={<NewsPage />} />
         <Route path="/keys" element={<KeysPage />} />
         <Route path="/keys/:keyId" element={<KeyDetailsPage />} />
         <Route path="/keys/:keyId/renew" element={<RenewKeyPage />} />
-        <Route path="/buy" element={<BuyPlanPage />} />
         <Route path="/payments" element={<Navigate to="/buy" replace />} />
         <Route path="/referrals" element={<Navigate to="/" replace />} />
         <Route path="/support" element={<Navigate to="/" replace />} />

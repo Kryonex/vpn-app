@@ -11,6 +11,7 @@ from app.models.user import User
 from app.schemas.system import (
     FreeTrialActivateResponse,
     FreeTrialStatusOut,
+    PaymentSettingsOut,
     SystemNewsListOut,
     SystemStatusOut,
     UserTelegramProxyOut,
@@ -46,6 +47,14 @@ async def get_system_news(
 ) -> SystemNewsListOut:
     items = await SystemStatusService(session).get_news()
     return SystemNewsListOut(items=items)
+
+
+@router.get('/payments', response_model=PaymentSettingsOut)
+async def get_payment_settings(
+    _: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PaymentSettingsOut:
+    return PaymentSettingsOut(**await SystemStatusService(session).get_payment_settings())
 
 
 @router.get('/free-trial', response_model=FreeTrialStatusOut)

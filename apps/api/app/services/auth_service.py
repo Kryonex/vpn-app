@@ -188,7 +188,7 @@ class AuthService:
             )
             key_status = VPNKeyStatus.ACTIVE if sub_status == SubscriptionStatus.ACTIVE else VPNKeyStatus.EXPIRED
 
-            key = await self.key_repo.create(owner_id=user.id, display_name=f'VPN @{username}')
+            key = await self.key_repo.create(owner_id=user.id, display_name=f'ZERO @{username}')
             subscription = Subscription(
                 vpn_key_id=key.id,
                 plan_id=default_plan.id,

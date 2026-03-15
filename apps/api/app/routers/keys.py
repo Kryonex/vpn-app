@@ -7,7 +7,6 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, rate_limit
-from app.core.config import get_settings
 from app.core.factories import threexui_dependency
 from app.core.redis import redis_dependency
 from app.db.session import get_session
@@ -21,7 +20,6 @@ from app.services.payment_service import PaymentService
 from app.services.system_service import SystemStatusService
 
 router = APIRouter(prefix='/keys', tags=['keys'])
-settings = get_settings()
 
 
 @router.get('', response_model=list[VPNKeyOut])
@@ -70,7 +68,7 @@ async def purchase_key(
         provider=payment.provider,
         status=payment.status,
         confirmation_url=payment.confirmation_url,
-        transfer_phone=settings.payment_phone or None,
+        transfer_phone=(payment.metadata_json or {}).get('transfer_phone'),
         transfer_note=(payment.metadata_json or {}).get('transfer_note'),
     )
 
@@ -101,7 +99,7 @@ async def renew_key(
         provider=payment.provider,
         status=payment.status,
         confirmation_url=payment.confirmation_url,
-        transfer_phone=settings.payment_phone or None,
+        transfer_phone=(payment.metadata_json or {}).get('transfer_phone'),
         transfer_note=(payment.metadata_json or {}).get('transfer_note'),
     )
 

@@ -13,9 +13,9 @@ import { openTelegramProxy } from '../telegram';
 import type { TelegramProxyAccess, VPNKey } from '../types/models';
 
 const connectionGuide = [
-  'Нажмите «Добавить в Happ», если приложение установлено и поддерживает открытие ссылок подключения.',
+  'Нажмите «Добавить в Happ», если приложение уже установлено и умеет открывать такие ссылки.',
   'Если кнопка не сработает, скопируйте ссылку ниже и вставьте её вручную в Happ или другое совместимое приложение.',
-  'Для быстрого импорта также можно отсканировать QR-код прямо с экрана.',
+  'Для быстрого импорта можно использовать QR-код прямо с этого экрана.',
 ] as const;
 
 export function KeyDetailsPage() {
@@ -31,70 +31,54 @@ export function KeyDetailsPage() {
   const [proxyAccess, setProxyAccess] = useState<TelegramProxyAccess | null>(null);
 
   useEffect(() => {
-    if (!keyId) {
-      return;
-    }
+    if (!keyId) return;
     setLoading(true);
     apiRequest<VPNKey>(`/keys/${keyId}`)
       .then(setKeyData)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить ключ'))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить доступ'))
       .finally(() => setLoading(false));
     apiRequest<TelegramProxyAccess>('/system/telegram-proxy').then(setProxyAccess).catch(() => null);
   }, [keyId]);
 
   const copyUri = async () => {
     const uri = keyData?.active_version?.connection_uri;
-    if (!uri) {
-      return;
-    }
+    if (!uri) return;
     await navigator.clipboard.writeText(uri);
     setMessage('Ссылка подключения скопирована.');
   };
 
   const rotate = async () => {
-    if (!keyId) {
-      return;
-    }
+    if (!keyId) return;
     try {
       setRotating(true);
       await apiRequest(`/keys/${keyId}/rotate`, toJsonBody({}));
-      setMessage('Ключ успешно перевыпущен.');
+      setMessage('Конфигурация успешно обновлена.');
       const fresh = await apiRequest<VPNKey>(`/keys/${keyId}`);
       setKeyData(fresh);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось перевыпустить ключ');
+      setError(err instanceof Error ? err.message : 'Не удалось обновить конфигурацию');
     } finally {
       setRotating(false);
     }
   };
 
   const removeKey = async () => {
-    if (!keyId || !window.confirm('Удалить этот ключ из истории?')) {
-      return;
-    }
+    if (!keyId || !window.confirm('Удалить этот доступ из истории?')) return;
     try {
       setDeleting(true);
       await apiRequest(`/keys/${keyId}`, { method: 'DELETE' });
       navigate('/keys');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось удалить ключ');
+      setError(err instanceof Error ? err.message : 'Не удалось удалить доступ');
     } finally {
       setDeleting(false);
     }
   };
 
-  if (loading) {
-    return <LoadingState text="Загружаем данные ключа..." />;
-  }
-
-  if (error && !keyData) {
-    return <ErrorState text={error} />;
-  }
-
-  if (!keyData) {
-    return <EmptyState title="Ключ не найден" text="Возможно, он уже удалён или ещё не успел загрузиться." />;
-  }
+  if (loading) return <LoadingState text="Загружаем данные доступа..." />;
+  if (error && !keyData) return <ErrorState text={error} />;
+  if (!keyData) return <EmptyState title="Доступ не найден" text="Возможно, он уже удалён или ещё не успел загрузиться." />;
 
   const uri = keyData.active_version?.connection_uri;
   const deletionAllowed = keyData.status !== 'active' || !keyData.active_version;
@@ -105,24 +89,24 @@ export function KeyDetailsPage() {
       <PageHeader title={keyData.display_name} subtitle="Подключение, срок действия и быстрые действия" />
       <SystemStatusBanner status={systemStatus} compact />
 
-      <article className="glass-card">
+      <article className="glass-card liquid-panel">
         <div className="row-between">
           <div>
             <p className="title-line">Текущий статус</p>
             <p className="muted">
               {keyData.current_subscription
                 ? `Действует до ${new Date(keyData.current_subscription.expires_at).toLocaleString()}`
-                : 'Подписка не найдена'}
+                : 'Статус доступа не найден'}
             </p>
           </div>
           <StatusBadge status={keyData.status} />
         </div>
-        <p className="muted">Версия ключа: {keyData.active_version?.version ?? 'нет активной версии'}</p>
+        <p className="muted">Версия конфигурации: {keyData.active_version?.version ?? 'нет активной версии'}</p>
       </article>
 
       {uri ? (
         <>
-          <article className="glass-card">
+          <article className="glass-card liquid-panel">
             <p className="muted">Ссылка подключения</p>
             <p className="mono-block">{uri}</p>
             <div className="action-row">
@@ -143,7 +127,7 @@ export function KeyDetailsPage() {
                 </button>
               )}
               <button className="btn btn-ghost" onClick={rotate} disabled={rotating || Boolean(systemStatus?.maintenance_mode)}>
-                <RefreshCw size={16} className={rotating ? 'spin' : ''} /> Перевыпустить
+                <RefreshCw size={16} className={rotating ? 'spin' : ''} /> Обновить
               </button>
               <Link className="btn btn-ghost" to={`/keys/${keyData.id}/renew`}>
                 <RefreshCw size={16} /> Продлить
@@ -151,8 +135,8 @@ export function KeyDetailsPage() {
             </div>
           </article>
 
-          <article className="glass-card">
-            <p className="title-line">Как добавить ключ</p>
+          <article className="glass-card liquid-panel">
+            <p className="title-line">Как подключить ZERO</p>
             <div className="stack compact-stack">
               {connectionGuide.map((item, index) => (
                 <div key={item} className="hint-row">
@@ -162,11 +146,11 @@ export function KeyDetailsPage() {
               ))}
             </div>
             <div className="qr-wrap">
-              <div className="qr-card">
+              <div className="qr-card liquid-panel">
                 <div className="qr-title">
                   <QrCode size={16} /> QR-код
                 </div>
-                <QRCodeCanvas value={uri} size={180} bgColor="#050505" fgColor="#FAFAFA" />
+                <QRCodeCanvas value={uri} size={180} bgColor="#0f0f0f" fgColor="#f5f5f5" />
               </div>
             </div>
           </article>
@@ -176,15 +160,15 @@ export function KeyDetailsPage() {
           title="Ссылка подключения пока недоступна"
           text={
             keyData.status === 'revoked'
-              ? 'Этот ключ уже отключён. Вы можете удалить его из истории или создать новый доступ.'
-              : 'Ключ ещё подготавливается. Обновите страницу немного позже.'
+              ? 'Этот доступ уже отключён. Вы можете удалить его из истории или создать новый.'
+              : 'Конфигурация ещё подготавливается. Обновите страницу немного позже.'
           }
         />
       )}
 
       {deletionAllowed && (
         <button className="btn btn-danger-soft" onClick={removeKey} disabled={deleting}>
-          <Trash2 size={16} /> Удалить ключ из истории
+          <Trash2 size={16} /> Удалить доступ из истории
         </button>
       )}
 

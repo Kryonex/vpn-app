@@ -1,4 +1,4 @@
-﻿import { CircleDollarSign, Copy, Sparkles } from 'lucide-react';
+﻿import { CircleDollarSign, Copy, MessageCircleMore, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -7,12 +7,14 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
-import type { PaymentIntent, Plan } from '../types/models';
+import type { PaymentIntent, PaymentSettings, Plan, SupportContact } from '../types/models';
 
 export function RenewKeyPage() {
   const { systemStatus } = useAuth();
   const { keyId } = useParams<{ keyId: string }>();
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({ enabled: true, mode: 'direct' });
+  const [support, setSupport] = useState<SupportContact | null>(null);
   const [bonusDays, setBonusDays] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,8 +23,16 @@ export function RenewKeyPage() {
   const [transferNote, setTransferNote] = useState<string | null>(null);
 
   useEffect(() => {
-    apiRequest<Plan[]>('/plans')
-      .then(setPlans)
+    Promise.all([
+      apiRequest<Plan[]>('/plans'),
+      apiRequest<PaymentSettings>('/system/payments'),
+      apiRequest<SupportContact>('/support'),
+    ])
+      .then(([planData, paymentConfig, supportData]) => {
+        setPlans(planData);
+        setPaymentSettings(paymentConfig);
+        setSupport(supportData);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить тарифы'))
       .finally(() => setLoading(false));
   }, []);
@@ -36,7 +46,11 @@ export function RenewKeyPage() {
       );
       setTransferPhone(payment.transfer_phone);
       setTransferNote(payment.transfer_note);
-      setMessage('Заявка на продление создана. Выполните перевод и отправьте чек администратору.');
+      setMessage(
+        paymentSettings.enabled
+          ? 'Заявка на продление создана. Выполните перевод и отправьте подтверждение администратору.'
+          : 'Заявка создана. Для оплаты продолжите общение с администратором.',
+      );
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать заявку на продление');
@@ -45,10 +59,10 @@ export function RenewKeyPage() {
 
   return (
     <section className="stack">
-      <PageHeader title="Продление ключа" subtitle="Продлите текущий ключ без перевыпуска" />
+      <PageHeader title="Продление доступа" subtitle="Продлите текущий доступ без перевыпуска" />
       <SystemStatusBanner status={systemStatus} compact />
 
-      <article className="glass-card">
+      <article className="glass-card liquid-panel">
         <label className="muted" htmlFor="bonus-days">Сколько бонусных дней использовать</label>
         <div className="input-wrap">
           <Sparkles size={16} />
@@ -65,22 +79,34 @@ export function RenewKeyPage() {
 
       {loading && <LoadingState text="Загружаем тарифы..." />}
       {error && <ErrorState text={error} />}
-      {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов нет" text="Попробуйте позже." />}
+      {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов пока нет" text="Попробуйте открыть раздел немного позже." />}
 
-      {transferPhone && (
-        <article className="glass-card">
+      {paymentSettings.enabled && transferPhone && (
+        <article className="glass-card liquid-panel">
           <p className="title-line">Как оплатить продление</p>
           <p className="muted">Номер для перевода: <strong>{transferPhone}</strong></p>
           <p className="muted">Комментарий к переводу:</p>
-          <p className="mono-block">{transferNote || 'VPN продление'}</p>
-          <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(transferPhone)}>
+          <p className="mono-block">{transferNote || 'ZERO продление'}</p>
+          <button className="btn btn-ghost" onClick={() => transferPhone && navigator.clipboard.writeText(transferPhone)}>
             <Copy size={16} /> Скопировать номер
           </button>
         </article>
       )}
 
+      {!paymentSettings.enabled && message && (
+        <article className="glass-card liquid-panel">
+          <p className="title-line">Продление через администратора</p>
+          <p className="muted">ZERO не показывает прямые реквизиты в этом режиме. Администратор завершит оформление вручную.</p>
+          {support?.telegram_link && (
+            <a className="btn btn-primary" href={support.telegram_link} target="_blank" rel="noreferrer">
+              <MessageCircleMore size={16} /> Написать администратору
+            </a>
+          )}
+        </article>
+      )}
+
       {!loading && !error && plans.map((plan) => (
-        <article key={plan.id} className="glass-card plan-card">
+        <article key={plan.id} className="glass-card plan-card liquid-panel">
           <div className="row-between">
             <p className="title-line">{plan.name}</p>
             <p className="price-line">{plan.price} {plan.currency}</p>

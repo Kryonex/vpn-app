@@ -480,7 +480,7 @@ class AdminService:
 
         key = await self.key_repo.create(
             owner_id=user.id,
-            display_name=display_name or f'VPN @{normalized_username}',
+            display_name=display_name or f'ZERO @{normalized_username}',
         )
 
         subscription = Subscription(

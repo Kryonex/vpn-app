@@ -1,13 +1,13 @@
-﻿import { CircleDollarSign, Home, KeyRound, Shield } from 'lucide-react';
+﻿import { CircleDollarSign, Home, Newspaper, Shield } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 
 const navItems: Array<{ to: string; label: string; icon: ComponentType<{ size?: string | number }>; adminOnly?: boolean }> = [
-  { to: '/', label: 'Кабинет', icon: Home },
-  { to: '/keys', label: 'Ключи', icon: KeyRound },
+  { to: '/', label: 'Дом', icon: Home },
   { to: '/buy', label: 'Купить', icon: CircleDollarSign },
+  { to: '/news', label: 'Новости', icon: Newspaper },
   { to: '/admin', label: 'Админ', icon: Shield, adminOnly: true },
 ];
 

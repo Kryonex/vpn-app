@@ -9,7 +9,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, SkeletonCards } from '../components/StateCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import type { Payment, Plan, SystemStatus, VPNKey } from '../types/models';
+import type { Payment, PaymentSettings, Plan, SystemStatus, VPNKey } from '../types/models';
 
 type AdminStats = { total_payments: number; succeeded_payments: number; pending_payments: number; failed_payments: number; total_revenue: string; month_revenue: string };
 type AdminUser = {
@@ -31,6 +31,7 @@ type ReferralSettings = { referral_bonus_days: number };
 type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
 type NotificationQueueStatus = { queue_key: string; pending_count: number };
+type PaymentSettingsState = PaymentSettings;
 type TelegramProxySettings = { proxy_url: string | null; button_text: string; enabled: boolean };
 type AdminInbound = { id: number; remark: string | null; protocol: string | null; port: number | null };
 type PurchaseInboundSettings = { inbound_ids: number[] };
@@ -100,6 +101,7 @@ export function AdminPage() {
   const [referralSettings, setReferralSettings] = useState<ReferralSettings>({ referral_bonus_days: 7 });
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettingsState>({ enabled: true, mode: 'direct' });
   const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Подключить прокси', enabled: false });
   const [availableInbounds, setAvailableInbounds] = useState<AdminInbound[]>([]);
   const [purchaseInboundIds, setPurchaseInboundIds] = useState<number[]>([]);
@@ -152,6 +154,7 @@ export function AdminPage() {
       { name: 'referral_settings', run: () => apiRequest<ReferralSettings>('/admin/settings/referral') },
       { name: 'system_status', run: () => apiRequest<SystemStatus>('/admin/system/status') },
       { name: 'notification_queue', run: () => apiRequest<NotificationQueueStatus>('/admin/system/notification-queue') },
+      { name: 'payment_settings', run: () => apiRequest<PaymentSettingsState>('/admin/system/payments') },
       { name: 'telegram_proxy', run: () => apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy') },
       { name: 'inbounds', run: () => apiRequest<AdminInbound[]>('/admin/system/inbounds') },
       { name: 'purchase_inbounds', run: () => apiRequest<PurchaseInboundSettings>('/admin/system/purchase-inbounds') },
@@ -222,6 +225,9 @@ export function AdminPage() {
           }
           case 'notification_queue':
             setNotificationQueue(result.value as NotificationQueueStatus);
+            break;
+          case 'payment_settings':
+            setPaymentSettings(result.value as PaymentSettingsState);
             break;
           case 'telegram_proxy':
             setTelegramProxy(result.value as TelegramProxySettings);
@@ -443,6 +449,23 @@ export function AdminPage() {
             await apiRequest<SystemStatus>('/admin/system/status', { method: 'PATCH', body: JSON.stringify({ status: statusValue, message: statusMessage || null, maintenance_mode: maintenanceMode, show_to_all: statusShowToAll, scheduled_for: statusScheduledFor ? new Date(statusScheduledFor).toISOString() : null, send_notification_to_all: statusNotifyAll }) });
             await afterAction('Системный статус обновлён.');
           })}><Wrench size={16} /> Сохранить статус</button>
+        </FoldableSection>
+
+        <FoldableSection title="Платежи ZERO" subtitle="Управление выдачей реквизитов внутри мини-приложения" icon={<Wallet size={16} />} defaultOpen={false}>
+          <div className="admin-note">
+            Когда прямые платежи выключены, ZERO не показывает номер для перевода. Пользователь создаёт заявку и продолжает оплату через администратора.
+          </div>
+          <div className="toggle-list">
+            <label className="toggle-row"><input type="checkbox" checked={paymentSettings.enabled} onChange={(e) => setPaymentSettings((prev) => ({ ...prev, enabled: e.target.checked }))} /><span>{paymentSettings.enabled ? 'Прямые платежи включены' : 'Оплата через администратора'}</span></label>
+          </div>
+          <button className="btn btn-primary" onClick={() => void run(async () => {
+            const updated = await apiRequest<PaymentSettingsState>('/admin/system/payments', {
+              method: 'PATCH',
+              body: JSON.stringify({ enabled: paymentSettings.enabled }),
+            });
+            setPaymentSettings(updated);
+            await afterAction(updated.enabled ? 'Прямые реквизиты снова доступны пользователям.' : 'Прямые платежи выключены. Теперь заявки ведут пользователей к администратору.');
+          })}><Wallet size={16} /> Сохранить режим оплаты</button>
         </FoldableSection>
 
         <FoldableSection title="Рассылка" subtitle="Сообщения пользователям и очередь уведомлений" icon={<Send size={16} />}>
@@ -817,3 +840,5 @@ export function AdminPage() {
     </section>
   );
 }
+
+

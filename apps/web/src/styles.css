@@ -1,14 +1,14 @@
 ﻿:root {
   color-scheme: dark;
   --page-gutter: clamp(12px, 4vw, 18px);
-  --bg: #070707;
-  --bg-soft: #101010;
-  --card: #141414;
-  --card-alt: #1a1a1a;
-  --card-border: rgba(255, 255, 255, 0.08);
-  --accent: #ffffff;
-  --accent-strong: #dc2626;
-  --accent-soft: rgba(220, 38, 38, 0.12);
+  --bg: #050505;
+  --bg-soft: #111111;
+  --card: rgba(255, 255, 255, 0.08);
+  --card-alt: rgba(255, 255, 255, 0.12);
+  --card-border: rgba(255, 255, 255, 0.18);
+  --accent: #f5f5f5;
+  --accent-strong: #f3f3f3;
+  --accent-soft: rgba(255, 255, 255, 0.1);
   --text: #fafafa;
   --text-soft: #a1a1aa;
   --text-muted: #71717a;
@@ -19,8 +19,8 @@
   --radius-lg: 20px;
   --radius-md: 16px;
   --radius-sm: 12px;
-  --shadow-card: 0 20px 48px rgba(0, 0, 0, 0.28);
-  --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.18);
+  --shadow-card: 0 18px 40px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.2);
   font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -1015,4 +1015,205 @@ details[open] .foldable-arrow {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+
+.zero-frame {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.22), transparent 18%),
+    radial-gradient(circle at 88% 14%, rgba(255, 255, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, #090909 0%, #111111 100%);
+}
+
+.hero-card,
+.glass-card,
+.state-card,
+.skeleton-card,
+.bottom-nav,
+.status-banner,
+.modal-card,
+.qr-card,
+.admin-user-card,
+.admin-item,
+.plan-card,
+.key-card {
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(calc(100% - 24px), 460px);
+  padding: 8px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+}
+
+.nav-link {
+  border-radius: 18px;
+  min-height: 58px;
+}
+
+.nav-link.active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 10px 22px rgba(0,0,0,0.18);
+}
+
+.zero-hero {
+  padding-top: 18px;
+}
+
+.zero-brand {
+  display: inline-flex;
+  align-items: center;
+  align-self: start;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.liquid-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.modal-card,
+.liquid-modal {
+  background: linear-gradient(180deg, rgba(24, 24, 24, 0.92), rgba(16, 16, 16, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+}
+
+.modal-backdrop {
+  background: rgba(5, 5, 5, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.news-card,
+.zero-news-preview,
+.support-inline-card,
+.buy-mode-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.news-card::after,
+.zero-hero::before,
+.buy-mode-card::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.zero-hero::before {
+  width: 180px;
+  height: 180px;
+  top: -72px;
+  left: -24px;
+  background: radial-gradient(circle, rgba(255,255,255,0.28), transparent 70%);
+}
+
+.buy-mode-card::after,
+.news-card::after {
+  width: 140px;
+  height: 140px;
+  right: -40px;
+  top: -42px;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 72%);
+}
+
+.news-headline {
+  align-items: center;
+}
+
+.btn-inline {
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
+.btn {
+  border-radius: 16px;
+}
+
+.btn-primary {
+  color: #111111;
+  background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(215,215,215,0.9));
+  border-color: rgba(255,255,255,0.3);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.stat-icon,
+.page-header-chip,
+.icon-button {
+  background: rgba(255,255,255,0.08);
+  color: #f5f5f5;
+}
+
+.greeting-chip,
+.chip {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.page-subtitle,
+.muted,
+.state-text,
+.status-banner-text,
+.status-banner-meta,
+.profile-username,
+.stat-label,
+.field-label,
+.hero-label,
+.caps {
+  color: rgba(255,255,255,0.7);
+}
+
+.price-line,
+.title-line,
+.profile-name,
+.hero-title,
+.stat-value,
+h1 {
+  color: #ffffff;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding-top: 10px;
+  }
+
+  .hero-card,
+  .glass-card,
+  .state-card,
+  .skeleton-card {
+    padding: 14px;
+    border-radius: 22px;
+  }
+
+  .bottom-nav {
+    width: calc(100% - 20px);
+    bottom: calc(10px + env(safe-area-inset-bottom));
+  }
 }

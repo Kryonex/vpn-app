@@ -48,6 +48,8 @@ from app.schemas.system import (
     FreeTrialSettingsUpdateRequest,
     NotificationQueueClearResponse,
     NotificationQueueStatusOut,
+    PaymentSettingsOut,
+    PaymentSettingsUpdateRequest,
     PurchaseInboundSettingsOut,
     PurchaseInboundSettingsUpdateRequest,
     SystemStatusOut,
@@ -329,6 +331,21 @@ async def admin_clear_notification_queue(
     notifier = NotificationService(redis)
     cleared_count = await notifier.clear_queue()
     return NotificationQueueClearResponse(ok=True, cleared_count=cleared_count)
+
+
+@router.get('/system/payments', response_model=PaymentSettingsOut)
+async def admin_get_payment_settings(
+    session: AsyncSession = Depends(get_session),
+):
+    return PaymentSettingsOut(**await SystemStatusService(session).get_payment_settings())
+
+
+@router.patch('/system/payments', response_model=PaymentSettingsOut)
+async def admin_update_payment_settings(
+    payload: PaymentSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    return PaymentSettingsOut(**await SystemStatusService(session).set_payment_settings(enabled=payload.enabled))
 
 
 @router.get('/system/telegram-proxy', response_model=TelegramProxySettingsOut)

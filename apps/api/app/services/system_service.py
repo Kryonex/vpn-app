@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -36,6 +36,7 @@ class SystemStatusService:
     TELEGRAM_PROXY_URL_KEY = 'telegram_proxy_url'
     TELEGRAM_PROXY_BUTTON_TEXT_KEY = 'telegram_proxy_button_text'
     NEWS_KEY = 'system_news'
+    PAYMENTS_ENABLED_KEY = 'payments_enabled'
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -87,6 +88,25 @@ class SystemStatusService:
         await self.repo.set(self.STATUS_KEY, json.dumps(payload, ensure_ascii=False))
         await self.session.flush()
         return state
+
+    async def get_payment_settings(self) -> dict[str, object]:
+        setting = await self.repo.get(self.PAYMENTS_ENABLED_KEY)
+        enabled = True
+        if setting and setting.value.strip():
+            enabled = setting.value.strip().lower() not in {'0', 'false', 'off', 'disabled'}
+        return {
+            'enabled': enabled,
+            'mode': 'direct' if enabled else 'admin_contact',
+        }
+
+    async def set_payment_settings(self, *, enabled: bool) -> dict[str, object]:
+        await self.repo.set(self.PAYMENTS_ENABLED_KEY, 'true' if enabled else 'false')
+        await self.session.flush()
+        return await self.get_payment_settings()
+
+    async def payments_enabled(self) -> bool:
+        data = await self.get_payment_settings()
+        return bool(data['enabled'])
 
     async def get_user_telegram_proxy(self, user: User) -> dict[str, object]:
         active_keys_count = int(
@@ -209,15 +229,13 @@ class SystemStatusService:
     ) -> tuple[int, bool, str]:
         normalized = message.strip()
         normalized_image = (image_data_url or '').strip() or None
-        if not normalized:
-            if not normalized_image:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Message text or image is required')
+        if not normalized and not normalized_image:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Message text or image is required')
         if send_to_all and user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Use either send_to_all or user_id')
         if not send_to_all and not user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Target user is required')
 
-        target_users = []
         if send_to_all:
             target_users = (
                 await self.session.scalars(

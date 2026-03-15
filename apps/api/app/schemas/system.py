@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -66,6 +66,15 @@ class NotificationQueueStatusOut(BaseModel):
 class NotificationQueueClearResponse(BaseModel):
     ok: bool
     cleared_count: int
+
+
+class PaymentSettingsOut(BaseModel):
+    enabled: bool = True
+    mode: str = 'direct'
+
+
+class PaymentSettingsUpdateRequest(BaseModel):
+    enabled: bool = True
 
 
 class TelegramProxySettingsOut(BaseModel):

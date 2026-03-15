@@ -24,6 +24,7 @@ from app.repositories.app_settings_repository import AppSettingsRepository
 from app.services.access_policy_service import AccessPolicyService
 from app.services.notification_service import NotificationService
 from app.services.referral_service import ReferralService
+from app.services.system_service import SystemStatusService
 
 
 class PaymentService:
@@ -51,7 +52,8 @@ class PaymentService:
         key_name: str | None,
         apply_bonus_days: int,
     ) -> Payment:
-        if not self.settings.payment_phone:
+        payments_enabled = await SystemStatusService(self.session).payments_enabled()
+        if payments_enabled and not self.settings.payment_phone:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Payment phone is not configured')
 
         plan = await self.plan_repo.get_by_id(plan_id)
@@ -72,9 +74,10 @@ class PaymentService:
             idempotence_key=uuid.uuid4().hex,
             bonus_days_applied=bonus_days,
             metadata_json={
-                'key_name': key_name or 'VPN Key',
-                'transfer_phone': self.settings.payment_phone,
+                'key_name': key_name or 'ZERO Access',
+                'transfer_phone': self.settings.payment_phone if payments_enabled else None,
                 'transfer_note': transfer_note,
+                'payment_mode': 'direct' if payments_enabled else 'admin_contact',
             },
         )
         await self.payment_repo.create(payment)
@@ -91,7 +94,8 @@ class PaymentService:
         plan_id: UUID,
         apply_bonus_days: int,
     ) -> Payment:
-        if not self.settings.payment_phone:
+        payments_enabled = await SystemStatusService(self.session).payments_enabled()
+        if payments_enabled and not self.settings.payment_phone:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Payment phone is not configured')
 
         key = await self.key_repo.get_owned_key(key_id, user.id)
@@ -118,8 +122,9 @@ class PaymentService:
             bonus_days_applied=bonus_days,
             metadata_json={
                 'key_name': key.display_name,
-                'transfer_phone': self.settings.payment_phone,
+                'transfer_phone': self.settings.payment_phone if payments_enabled else None,
                 'transfer_note': transfer_note,
+                'payment_mode': 'direct' if payments_enabled else 'admin_contact',
             },
         )
         await self.payment_repo.create(payment)
@@ -196,14 +201,14 @@ class PaymentService:
         if user.telegram_account:
             await self.notification_service.enqueue_telegram_notification(
                 telegram_user_id=user.telegram_account.telegram_user_id,
-                text=f'Платеж подтвержден. Статус: {payment.status.value}.',
+                text=f'Оплата подтверждена. Статус заявки: {payment.status.value}.',
             )
 
     async def _activate_purchase_payment(self, user: User, payment: Payment, duration_days: int) -> None:
         now = datetime.now(timezone.utc)
         expires = now + timedelta(days=duration_days)
 
-        key_name = (payment.metadata_json or {}).get('key_name') or 'VPN Key'
+        key_name = (payment.metadata_json or {}).get('key_name') or 'ZERO Access'
         key = await self.key_repo.create(owner_id=user.id, display_name=key_name)
 
         subscription = Subscription(
@@ -247,7 +252,7 @@ class PaymentService:
             proxy_url, proxy_button_text = await self._get_telegram_proxy_button()
             await self.notification_service.enqueue_telegram_notification(
                 telegram_user_id=user.telegram_account.telegram_user_id,
-                text=f'VPN ключ создан: {key.display_name}. Действует до {expires.date().isoformat()}.',
+                text=f'Доступ ZERO активирован: {key.display_name}. Действует до {expires.date().isoformat()}.',
                 button_url=proxy_url,
                 button_text=proxy_button_text,
             )
@@ -317,7 +322,7 @@ class PaymentService:
             proxy_url, proxy_button_text = await self._get_telegram_proxy_button()
             await self.notification_service.enqueue_telegram_notification(
                 telegram_user_id=user.telegram_account.telegram_user_id,
-                text=f'Ключ {key.display_name} продлен до {new_expires.date().isoformat()}.',
+                text=f'Доступ {key.display_name} продлён до {new_expires.date().isoformat()}.',
                 button_url=proxy_url,
                 button_text=proxy_button_text,
             )
@@ -331,7 +336,7 @@ class PaymentService:
 
     def _build_transfer_note(self, operation: PaymentOperation, plan_name: str) -> str:
         operation_text = 'покупка' if operation == PaymentOperation.PURCHASE else 'продление'
-        return f'VPN {operation_text} | {plan_name} | payment:{uuid.uuid4().hex[:10]}'
+        return f'ZERO {operation_text} | {plan_name} | payment:{uuid.uuid4().hex[:10]}'
 
     async def _get_telegram_proxy_button(self) -> tuple[str | None, str]:
         proxy_url_setting = await self.app_settings_repo.get('telegram_proxy_url')
@@ -366,7 +371,8 @@ class PaymentService:
             f'Тариф: {plan_name}\n'
             f'Сумма: {payment.amount} {payment.currency}\n'
             f'Платёж: {payment.id}\n'
-            f'Комментарий к переводу: {transfer_note}'
+            f'Комментарий к переводу: {transfer_note}\n'
+            f'Режим оплаты: {"через администратора" if (payment.metadata_json or {}).get("payment_mode") == "admin_contact" else "по реквизитам"}'
         )
         await self.notification_service.enqueue_telegram_notification(
             telegram_user_id=admin_telegram_id,
