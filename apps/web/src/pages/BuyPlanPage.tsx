@@ -1,5 +1,6 @@
 ﻿import { CheckCircle2, CircleDollarSign, Copy, History, MessageCircleMore, ReceiptText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { apiRequest, toJsonBody } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
@@ -7,12 +8,13 @@ import { EmptyState, ErrorState, SkeletonCards } from '../components/StateCards'
 import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
-import type { Payment, PaymentIntent, PaymentSettings, Plan, SupportContact } from '../types/models';
+import type { Payment, PaymentIntent, PaymentSettings, Plan, SupportContact, VPNKey } from '../types/models';
 
 export function BuyPlanPage() {
   const { systemStatus } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [keys, setKeys] = useState<VPNKey[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({ enabled: true, mode: 'direct' });
   const [support, setSupport] = useState<SupportContact | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,12 +29,14 @@ export function BuyPlanPage() {
     Promise.all([
       apiRequest<Plan[]>('/plans'),
       apiRequest<Payment[]>('/payments'),
+      apiRequest<VPNKey[]>('/keys'),
       apiRequest<PaymentSettings>('/system/payments'),
       apiRequest<SupportContact>('/support'),
     ])
-      .then(([plansData, paymentsData, paymentConfig, supportData]) => {
+      .then(([plansData, paymentsData, keysData, paymentConfig, supportData]) => {
         setPlans(plansData);
         setPayments(paymentsData);
+        setKeys(keysData);
         setPaymentSettings(paymentConfig);
         setSupport(supportData);
       })
@@ -84,10 +88,14 @@ export function BuyPlanPage() {
     () => payments.filter((payment) => payment.status !== 'pending' && payment.status !== 'waiting_for_capture').slice(0, 6),
     [payments],
   );
+  const renewableKeys = useMemo(
+    () => keys.filter((key) => key.status === 'active' && key.current_subscription),
+    [keys],
+  );
 
   return (
     <section className="stack">
-      <PageHeader title="Подключение ZERO" subtitle="Тарифы, заявки и история активаций в одном месте" />
+      <PageHeader title="Покупка и продление" subtitle="Подключение, продление и заявки собраны в одном аккуратном экране" />
       <SystemStatusBanner status={systemStatus} compact />
 
       {loading && <SkeletonCards count={3} />}
@@ -148,8 +156,8 @@ export function BuyPlanPage() {
 
       {!paymentSettings.enabled && activePayments.length > 0 && (
         <article className="glass-card liquid-panel support-inline-card">
-          <p className="title-line">Открытые заявки переданы администратору</p>
-          <p className="muted">Ваши заявки уже зафиксированы. Для оплаты просто продолжите общение с администратором.</p>
+          <p className="title-line">Открытые заявки уже переданы администратору</p>
+          <p className="muted">Ваши заявки сохранены. Для оплаты достаточно продолжить общение с администратором.</p>
           {support?.telegram_link && (
             <a className="btn btn-primary" href={support.telegram_link} target="_blank" rel="noreferrer">
               <MessageCircleMore size={16} /> Открыть чат
@@ -161,14 +169,48 @@ export function BuyPlanPage() {
       <article className="glass-card liquid-panel">
         <div className="section-head">
           <div>
-            <p className="title-line row-inline"><CircleDollarSign size={16} /> Тарифы ZERO</p>
-            <p className="muted">Выберите подходящий режим ускорения и создайте заявку на подключение.</p>
+            <p className="title-line row-inline"><ReceiptText size={16} /> Продлить действующий доступ</p>
+            <p className="muted">Если доступ уже активен, продлить его можно без перевыпуска и без лишнего поиска по интерфейсу.</p>
+          </div>
+        </div>
+        <div className="stack compact-stack">
+          {renewableKeys.map((key) => (
+            <article key={key.id} className="plan-card compact-plan-card liquid-panel">
+              <div className="row-between card-topline">
+                <div>
+                  <p className="title-line">{key.display_name}</p>
+                  <p className="muted">
+                    {key.current_subscription?.expires_at
+                      ? `Активен до ${new Date(key.current_subscription.expires_at).toLocaleDateString()}`
+                      : 'Дата окончания уточняется'}
+                  </p>
+                </div>
+                <StatusBadge status={key.status} />
+              </div>
+              <Link className="btn btn-ghost" to={`/keys/${key.id}/renew`}>
+                <CircleDollarSign size={16} /> Открыть продление
+              </Link>
+            </article>
+          ))}
+          {!renewableKeys.length && (
+            <p className="muted">
+              Активных доступов для продления пока нет. Ниже можно оформить новую заявку на подключение.
+            </p>
+          )}
+        </div>
+      </article>
+
+      <article className="glass-card liquid-panel">
+        <div className="section-head">
+          <div>
+            <p className="title-line row-inline"><CircleDollarSign size={16} /> Новое подключение</p>
+            <p className="muted">Выберите подходящий режим ускорения и создайте новую заявку.</p>
           </div>
         </div>
         <div className="stack compact-stack">
           {!loading && !error && plans.map((plan) => (
             <article key={plan.id} className="plan-card compact-plan-card liquid-panel">
-              <div className="row-between">
+              <div className="row-between card-topline">
                 <div>
                   <p className="title-line">{plan.name}</p>
                   <p className="muted">{plan.duration_days} дней доступа</p>
@@ -183,13 +225,13 @@ export function BuyPlanPage() {
         </div>
       </article>
 
-      <div className="admin-grid">
+      <div className="admin-grid two-column-grid">
         <article className="glass-card admin-section liquid-panel">
           <p className="title-line row-inline"><ReceiptText size={16} /> Активные заявки</p>
           <div className="admin-list">
             {activePayments.map((payment) => (
               <article key={payment.id} className="admin-item">
-                <div className="row-between">
+                <div className="row-between card-topline">
                   <div>
                     <p className="title-line">{payment.amount} {payment.currency}</p>
                     <p className="muted">Создано: {new Date(payment.created_at).toLocaleString()}</p>
@@ -207,7 +249,7 @@ export function BuyPlanPage() {
           <div className="admin-list">
             {historyPayments.map((payment) => (
               <article key={payment.id} className="admin-item">
-                <div className="row-between">
+                <div className="row-between card-topline">
                   <div>
                     <p className="title-line">{payment.amount} {payment.currency}</p>
                     <p className="muted">{new Date(payment.created_at).toLocaleString()}</p>

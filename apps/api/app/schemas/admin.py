@@ -96,6 +96,11 @@ class AdminPlansListResponse(BaseModel):
     items: list[PlanOut]
 
 
+class AdminDeletePlanResponse(BaseModel):
+    ok: bool
+    plan_id: UUID
+
+
 class AdminClearPaymentsResponse(BaseModel):
     ok: bool
     deleted_count: int

@@ -57,3 +57,7 @@ class PlanRepository:
         await self.session.flush()
         return plan
 
+    async def delete(self, plan: Plan) -> None:
+        await self.session.delete(plan)
+        await self.session.flush()
+

@@ -164,8 +164,8 @@ export function HomePage() {
   return (
     <section className="stack">
       <PageHeader
-        title="ZERO"
-        subtitle="Ускоритель интернета с быстрым доступом, новостями и понятным управлением"
+        title="Личный кабинет"
+        subtitle="Управление доступом, бонусами и новостями без лишнего шума"
         action={
           <button className="page-header-chip page-header-button" onClick={() => setHelpOpen(true)} aria-label="Открыть помощь">
             <CircleHelp size={16} />
@@ -176,7 +176,7 @@ export function HomePage() {
       {localError && <ErrorState text={localError} />}
 
       <article className="hero-card zero-hero welcome-enter compact-hero">
-        <div className="zero-brand">ZERO</div>
+
         <div className="profile-row compact-profile-row">
           {avatar ? (
             <img className="profile-avatar" src={avatar} alt="Аватар" />
@@ -355,3 +355,4 @@ export function HomePage() {
     </section>
   );
 }
+

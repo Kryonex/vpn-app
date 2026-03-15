@@ -114,6 +114,13 @@ class AccessPolicyService:
         await self.session.flush()
         return normalized
 
+    async def delete_plan_inbound_ids(self, plan_id: UUID) -> None:
+        mapping = await self.get_plan_inbound_map()
+        if str(plan_id) in mapping:
+            del mapping[str(plan_id)]
+            await self._set_json(self.PLAN_INBOUND_MAP_KEY, mapping)
+            await self.session.flush()
+
     async def resolve_plan_inbound_ids(
         self,
         *,

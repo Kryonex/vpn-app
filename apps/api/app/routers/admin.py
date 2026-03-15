@@ -18,6 +18,7 @@ from app.schemas.admin import (
     AdminBindPanelKeyRequest,
     AdminBindPanelKeyResponse,
     AdminDeleteKeyRequest,
+    AdminDeletePlanResponse,
     AdminResetFreeTrialResponse,
     AdminDeleteUserRequest,
     AdminDeleteUserResponse,
@@ -501,6 +502,17 @@ async def admin_update_plan(
         inbound_ids=payload.inbound_ids,
     )
     return {'ok': True, 'plan_id': str(plan.id)}
+
+
+@router.delete('/plans/{plan_id}', response_model=AdminDeletePlanResponse)
+async def admin_delete_plan(
+    plan_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    result = await service.delete_plan(plan_id)
+    return AdminDeletePlanResponse(**result)
 
 
 @router.post('/keys/{key_id}/revoke', response_model=AdminKeyOut)

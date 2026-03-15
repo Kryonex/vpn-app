@@ -419,11 +419,11 @@ export function AdminPage() {
     setMessage(`Фотография прикреплена: ${file.name}`);
   };
 
-  if (loading) return <section className="stack"><PageHeader title="Админ-панель" subtitle="Загружаем данные управления" /><SkeletonCards count={5} /></section>;
+  if (loading) return <section className="stack"><PageHeader title="Управление ZERO" subtitle="Загружаем клиентов, тарифы и служебные настройки" /><SkeletonCards count={5} /></section>;
 
   return (
-    <section className="stack">
-      <PageHeader title="Админ-панель" subtitle="Клиенты, статусы сервиса, тарифы и рассылки" />
+      <section className="stack">
+      <PageHeader title="Управление ZERO" subtitle="Клиенты, тарифы, статусы сервиса и рассылки в одном экране" />
       {error && <ErrorState text={error} />}
 
       <div className="stat-grid">
@@ -759,9 +759,17 @@ export function AdminPage() {
                     ))}
                   </select>
                 </label>
-                <div className="row-between">
+                <div className="row-between plan-actions-row">
                   <label className="toggle-row"><input type="checkbox" checked={draft.is_active} onChange={(e) => updatePlanDraft(plan.id, 'is_active', e.target.checked)} /><span>Активен</span></label>
-                  <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/plans/${plan.id}`, { method: 'PATCH', body: JSON.stringify({ ...draft, price: Number(draft.price) }) }); await afterAction('Тариф обновлён. Активные клиенты этого тарифа автоматически досинхронизированы в новые inbound’ы.'); })}>Сохранить</button>
+                  <div className="admin-actions">
+                    <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/plans/${plan.id}`, { method: 'PATCH', body: JSON.stringify({ ...draft, price: Number(draft.price) }) }); await afterAction('Тариф обновлён. Активные клиенты этого тарифа автоматически досинхронизированы в новые inbound’ы.'); })}>Сохранить</button>
+                    <button className="btn btn-danger-soft" onClick={() => void run(async () => {
+                      const confirmed = window.confirm(`Удалить тариф «${draft.name}»? Это доступно только если по нему ещё не было оплат и подписок.`);
+                      if (!confirmed) return;
+                      await apiRequest<{ ok: boolean; plan_id: string }>(`/admin/plans/${plan.id}`, { method: 'DELETE' });
+                      await afterAction('Тариф удалён.');
+                    })}>Удалить</button>
+                  </div>
                 </div>
               </article>
             );

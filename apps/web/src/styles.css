@@ -1696,3 +1696,263 @@ h1 {
 .bottom-nav {
   animation: none;
 }
+
+/* Final typography and compact adaptive pass */
+:root {
+  --type-title: clamp(0.98rem, 0.92rem + 0.35vw, 1.08rem);
+  --type-body: 0.94rem;
+  --type-caption: 0.82rem;
+  --space-card: clamp(14px, 3vw, 18px);
+  --space-stack: clamp(12px, 2.6vw, 16px);
+}
+
+body {
+  font-size: 15px;
+}
+
+h1 {
+  font-size: clamp(1.24rem, 1.06rem + 0.7vw, 1.62rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+}
+
+.page-subtitle,
+.muted,
+.state-text,
+.status-banner-text,
+.status-banner-meta {
+  font-size: var(--type-body);
+  line-height: 1.52;
+}
+
+.title-line,
+.price-line,
+.state-title,
+.status-banner-title,
+.profile-name,
+.hero-title,
+.stat-value {
+  font-size: var(--type-title);
+  line-height: 1.16;
+  letter-spacing: -0.024em;
+}
+
+.hero-subtitle,
+.profile-username,
+.field-label,
+.stat-label,
+.nav-link span {
+  font-size: var(--type-caption);
+}
+
+.hero-card,
+.glass-card,
+.skeleton-card,
+.state-card,
+.status-banner,
+.modal-card,
+.admin-item,
+.admin-subitem,
+.support-card,
+.help-faq-item {
+  padding: var(--space-card);
+}
+
+.stack,
+.admin-grid,
+.admin-list,
+.admin-user-body,
+.compact-stack,
+.action-row,
+.admin-actions,
+.section-head {
+  gap: var(--space-stack);
+}
+
+.section-head {
+  align-items: start;
+}
+
+.page-header {
+  gap: 10px 12px;
+}
+
+.page-header > div,
+.section-head > div,
+.row-between > div,
+.admin-user-header > div,
+.foldable-summary > div {
+  min-width: 0;
+}
+
+.row-between.card-topline {
+  align-items: center;
+}
+
+.hero-card,
+.plan-card,
+.admin-user-card,
+.admin-item,
+.help-faq-item,
+.support-card {
+  border-radius: 20px;
+}
+
+.btn {
+  min-height: 46px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  line-height: 1.18;
+}
+
+.btn svg,
+.page-header-chip svg,
+.icon-button svg,
+.stat-icon svg {
+  flex-shrink: 0;
+}
+
+.input,
+select.input,
+textarea.input {
+  min-height: 46px;
+  padding: 12px 14px;
+  line-height: 1.4;
+}
+
+.field {
+  gap: 7px;
+}
+
+.field-label {
+  color: rgba(255, 255, 255, 0.66);
+  letter-spacing: 0.01em;
+}
+
+.mono-block {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.metric-pill {
+  min-height: 50px;
+  padding: 9px 11px;
+}
+
+.metric-pill-label {
+  justify-self: start;
+}
+
+.quick-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-actions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+
+.two-column-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plan-actions-row {
+  gap: 10px;
+}
+
+.plan-actions-row .admin-actions {
+  justify-content: end;
+}
+
+@media (max-width: 860px) {
+  .two-column-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --type-body: 0.9rem;
+    --type-caption: 0.78rem;
+    --space-card: 13px;
+    --space-stack: 11px;
+  }
+
+  h1 {
+    font-size: 1.18rem;
+  }
+
+  .page-header,
+  .row-between,
+  .section-head,
+  .admin-user-header,
+  .foldable-summary,
+  .plan-actions-row {
+    grid-template-columns: 1fr;
+  }
+
+  .action-row,
+  .admin-actions,
+  .compact-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-pills,
+  .quick-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .nav-link {
+    min-width: 72px;
+    min-height: 54px;
+    padding: 9px 10px;
+  }
+
+  .bottom-nav {
+    padding: 7px;
+  }
+
+  .bottom-nav-shell {
+    width: calc(100vw - 14px);
+    bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .plan-actions-row .admin-actions {
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 360px) {
+  :root {
+    --page-gutter: 10px;
+    --type-body: 0.87rem;
+    --type-caption: 0.74rem;
+  }
+
+  .metric-pills,
+  .quick-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .btn,
+  .input,
+  select.input,
+  textarea.input {
+    min-height: 44px;
+    padding: 11px 12px;
+  }
+
+  .hero-card,
+  .glass-card,
+  .admin-item,
+  .support-card,
+  .help-faq-item,
+  .modal-card {
+    padding: 12px;
+  }
+
+  .mono-block {
+    font-size: 0.74rem;
+  }
+}

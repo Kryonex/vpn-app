@@ -574,6 +574,28 @@ class AdminService:
         setattr(plan, 'inbound_ids', await self.access_policy.get_plan_inbound_ids(plan.id))
         return plan
 
+    async def delete_plan(self, plan_id: UUID) -> dict[str, object]:
+        plan = await self.plan_repo.get_by_id(plan_id)
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Plan not found')
+
+        payments_count = int(
+            (await self.session.scalar(select(func.count(Payment.id)).where(Payment.plan_id == plan_id))) or 0
+        )
+        subscriptions_count = int(
+            (await self.session.scalar(select(func.count(Subscription.id)).where(Subscription.plan_id == plan_id))) or 0
+        )
+        if payments_count or subscriptions_count:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='Тариф уже использовался в оплатах или подписках. Его можно отключить, но нельзя удалить.',
+            )
+
+        await self.access_policy.delete_plan_inbound_ids(plan_id)
+        await self.plan_repo.delete(plan)
+        await self.session.commit()
+        return {'ok': True, 'plan_id': str(plan_id)}
+
     async def _sync_existing_paid_keys_to_inbounds(
         self,
         inbound_ids: list[int],
