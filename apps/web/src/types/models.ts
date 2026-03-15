@@ -108,6 +108,23 @@ export type TelegramProxyAccess = {
   button_text: string;
 };
 
+export type FreeTrialStatus = {
+  enabled: boolean;
+  eligible: boolean;
+  days: number;
+  inbound_ids: number[];
+  reason: string | null;
+};
+
+export type FreeTrialActivateResponse = {
+  ok: boolean;
+  message: string;
+  key_id: string;
+  display_name: string;
+  expires_at: string;
+  connection_uri: string | null;
+};
+
 export type NewsItem = {
   id: string;
   title: string;

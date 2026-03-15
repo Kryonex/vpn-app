@@ -30,6 +30,8 @@ from app.schemas.plan import PlanOut
 from app.schemas.referral import ReferralMeOut
 from app.schemas.support import SupportContactOut
 from app.schemas.system import (
+    FreeTrialActivateResponse,
+    FreeTrialStatusOut,
     AdminMessageSendRequest,
     AdminMessageSendResponse,
     AdminSystemStatusUpdateRequest,
@@ -81,6 +83,8 @@ __all__ = [
     'AdminSystemStatusUpdateRequest',
     'AdminMessageSendRequest',
     'AdminMessageSendResponse',
+    'FreeTrialStatusOut',
+    'FreeTrialActivateResponse',
     'NotificationQueueStatusOut',
     'NotificationQueueClearResponse',
 ]

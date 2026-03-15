@@ -208,6 +208,7 @@ class AdminService:
 
     async def set_purchase_inbound_settings(self, inbound_ids: list[int]) -> dict[str, object]:
         saved = await self.access_policy.set_purchase_inbound_ids(inbound_ids)
+        await self._sync_existing_paid_keys_to_inbounds(saved)
         await self.session.commit()
         return {'inbound_ids': saved}
 
@@ -516,11 +517,73 @@ class AdminService:
             plan.sort_order = sort_order
         if inbound_ids is not None:
             await self.access_policy.set_plan_inbound_ids(plan.id, inbound_ids)
+            await self._sync_existing_plan_keys_to_inbounds(plan.id, inbound_ids)
 
         await self.session.commit()
         await self.session.refresh(plan)
         setattr(plan, 'inbound_ids', await self.access_policy.get_plan_inbound_ids(plan.id))
         return plan
+
+    async def _sync_existing_paid_keys_to_inbounds(self, inbound_ids: list[int]) -> int:
+        keys = (
+            await self.session.scalars(
+                select(VPNKey)
+                .join(Subscription, Subscription.id == VPNKey.current_subscription_id)
+                .join(Plan, Plan.id == Subscription.plan_id)
+                .where(Subscription.status == SubscriptionStatus.ACTIVE)
+                .options(selectinload(VPNKey.versions), selectinload(VPNKey.current_subscription).selectinload(Subscription.plan))
+            )
+        ).all()
+
+        synced = 0
+        for key in keys:
+            if not key.current_subscription or not key.current_subscription.plan:
+                continue
+            if key.current_subscription.plan.name == self.access_policy.FREE_TRIAL_PLAN_NAME:
+                continue
+            plan_specific = await self.access_policy.get_plan_inbound_ids(key.current_subscription.plan.id)
+            if plan_specific:
+                continue
+
+            active_version = next((item for item in key.versions if item.is_active), None)
+            if not active_version:
+                continue
+
+            if await self.threexui_service.ensure_version_inbounds(
+                active_version,
+                expires_at=key.current_subscription.expires_at,
+                inbound_ids=inbound_ids,
+            ):
+                synced += 1
+        return synced
+
+    async def _sync_existing_plan_keys_to_inbounds(self, plan_id: UUID, inbound_ids: list[int]) -> int:
+        keys = (
+            await self.session.scalars(
+                select(VPNKey)
+                .join(Subscription, Subscription.id == VPNKey.current_subscription_id)
+                .where(
+                    Subscription.plan_id == plan_id,
+                    Subscription.status == SubscriptionStatus.ACTIVE,
+                )
+                .options(selectinload(VPNKey.versions), selectinload(VPNKey.current_subscription))
+            )
+        ).all()
+
+        synced = 0
+        for key in keys:
+            if not key.current_subscription:
+                continue
+            active_version = next((item for item in key.versions if item.is_active), None)
+            if not active_version:
+                continue
+            if await self.threexui_service.ensure_version_inbounds(
+                active_version,
+                expires_at=key.current_subscription.expires_at,
+                inbound_ids=inbound_ids,
+            ):
+                synced += 1
+        return synced
 
     async def revoke_key(self, key_id: UUID, reason: str) -> VPNKey:
         key = await self.session.scalar(

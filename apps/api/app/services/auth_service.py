@@ -1,9 +1,11 @@
 ﻿from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, validate_telegram_init_data
 from app.integrations.threexui.service import ThreeXUIService
@@ -12,11 +14,13 @@ from app.models.enums import SubscriptionStatus, VPNKeyStatus
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.vpn_key_version import VPNKeyVersion
-from app.services.access_policy_service import AccessPolicyService
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
+from app.services.access_policy_service import AccessPolicyService
 from app.services.referral_service import ReferralService
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -54,7 +58,6 @@ class AuthService:
 
         await self.referral_service.link_referred_user(user, validated.get('start_param'))
         await self._import_panel_keys_for_username_if_needed(user=user, username=username)
-        await self._maybe_grant_free_trial(user)
 
         await self.session.commit()
         await self.session.refresh(user)
@@ -89,6 +92,56 @@ class AuthService:
         await self.session.commit()
         await self.session.refresh(user)
         return user
+
+    async def get_free_trial_status(self, user: User) -> dict[str, Any]:
+        settings = await self.access_policy.get_free_trial_settings()
+        has_grant = await self._has_free_trial_grant(user)
+        has_keys = await self.key_repo.count_by_owner(user.id) > 0
+        eligible = bool(settings['enabled']) and not has_grant and not has_keys
+
+        reason: str | None = None
+        if not settings['enabled']:
+            reason = 'disabled'
+        elif has_grant:
+            reason = 'already_used'
+        elif has_keys:
+            reason = 'already_has_subscription'
+
+        return {
+            'enabled': bool(settings['enabled']),
+            'eligible': eligible,
+            'days': int(settings['days']),
+            'inbound_ids': list(settings['inbound_ids']),
+            'reason': reason,
+        }
+
+    async def activate_free_trial(self, user: User) -> dict[str, Any]:
+        status = await self.get_free_trial_status(user)
+        if not status['enabled']:
+            raise ValueError('Пробный период сейчас недоступен.')
+        if not status['eligible']:
+            if status['reason'] == 'already_used':
+                raise ValueError('Пробный период уже был использован.')
+            if status['reason'] == 'already_has_subscription':
+                raise ValueError('Пробный период доступен только новым пользователям.')
+            raise ValueError('Пробный период недоступен.')
+
+        try:
+            key, subscription, version = await self._grant_free_trial(user)
+            await self.session.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception('Free trial activation failed for user_id=%s', user.id)
+            await self.session.rollback()
+            raise
+
+        return {
+            'ok': True,
+            'message': f'Пробный период активирован на {status["days"]} дн.',
+            'key_id': key.id,
+            'display_name': key.display_name,
+            'expires_at': subscription.expires_at,
+            'connection_uri': version.connection_uri,
+        }
 
     async def _import_panel_keys_for_username_if_needed(self, user: User, username: str | None) -> None:
         if not username:
@@ -162,7 +215,7 @@ class AuthService:
                 )
             )
 
-    async def _maybe_grant_free_trial(self, user: User) -> None:
+    async def _has_free_trial_grant(self, user: User) -> bool:
         existing_grant = await self.session.scalar(
             select(AuditLog.id).where(
                 AuditLog.action == 'free_trial_granted',
@@ -170,16 +223,10 @@ class AuthService:
                 AuditLog.entity_id == str(user.id),
             ).limit(1)
         )
-        if existing_grant:
-            return
+        return existing_grant is not None
 
-        if await self.key_repo.count_by_owner(user.id) > 0:
-            return
-
+    async def _grant_free_trial(self, user: User) -> tuple[Any, Subscription, VPNKeyVersion]:
         settings = await self.access_policy.get_free_trial_settings()
-        if not settings['enabled']:
-            return
-
         trial_plan = await self.access_policy.ensure_free_trial_plan(settings['days'])
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=settings['days'])
@@ -204,6 +251,8 @@ class AuthService:
                 threexui_service=threexui,
                 fallback_to_free_trial=True,
             )
+            if not inbound_ids:
+                raise RuntimeError('No inbound ids resolved for free trial')
             created = await threexui.create_vpn_client(
                 user=user,
                 key=key,
@@ -214,18 +263,17 @@ class AuthService:
         finally:
             await threexui.client.close()
 
-        self.session.add(
-            VPNKeyVersion(
-                vpn_key_id=key.id,
-                version=1,
-                threexui_client_uuid=created.client_uuid,
-                inbound_id=created.inbound_id,
-                email_remark=created.email_remark,
-                connection_uri=created.connection_uri,
-                raw_config=created.raw,
-                is_active=True,
-            )
+        version = VPNKeyVersion(
+            vpn_key_id=key.id,
+            version=1,
+            threexui_client_uuid=created.client_uuid,
+            inbound_id=created.inbound_id,
+            email_remark=created.email_remark,
+            connection_uri=created.connection_uri,
+            raw_config=created.raw,
+            is_active=True,
         )
+        self.session.add(version)
         self.session.add(
             AuditLog(
                 actor_type='system',
@@ -236,3 +284,5 @@ class AuthService:
                 metadata_json={'days': settings['days'], 'inbound_ids': inbound_ids},
             )
         )
+        await self.session.flush()
+        return key, subscription, version

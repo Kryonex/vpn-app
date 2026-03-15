@@ -59,6 +59,46 @@ class ThreeXUIService:
             return value.strip()
         return None
 
+    async def ensure_version_inbounds(
+        self,
+        version: VPNKeyVersion,
+        *,
+        expires_at: datetime,
+        inbound_ids: list[int],
+    ) -> bool:
+        requested_inbound_ids = sorted({int(item) for item in inbound_ids if int(item) > 0})
+        if not requested_inbound_ids:
+            return False
+
+        current_inbound_ids = self._extract_managed_inbound_ids(version)
+        sub_id = self._extract_sub_id(version) or uuid.uuid4().hex[:16]
+        missing_inbound_ids = [item for item in requested_inbound_ids if item not in current_inbound_ids]
+
+        changed = False
+        for inbound_id in missing_inbound_ids:
+            created = await self.client.add_client(
+                inbound_id=inbound_id,
+                client_uuid=version.threexui_client_uuid,
+                email_remark=version.email_remark or version.threexui_client_uuid,
+                expires_at=expires_at,
+                sub_id=sub_id,
+            )
+            if not version.connection_uri and created.connection_uri:
+                version.connection_uri = created.connection_uri
+            changed = True
+
+        raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
+        merged_inbound_ids = sorted({*current_inbound_ids, *requested_inbound_ids})
+        if raw_config.get('managed_inbound_ids') != merged_inbound_ids:
+            raw_config['managed_inbound_ids'] = merged_inbound_ids
+            changed = True
+        if raw_config.get('sub_id') != sub_id:
+            raw_config['sub_id'] = sub_id
+            changed = True
+        if changed:
+            version.raw_config = raw_config
+        return changed
+
     async def create_vpn_client(
         self,
         user: User,

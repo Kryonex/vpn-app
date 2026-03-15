@@ -122,3 +122,20 @@ class FreeTrialSettingsUpdateRequest(BaseModel):
     enabled: bool = False
     days: int = Field(default=3, ge=1, le=365)
     inbound_ids: list[int] = Field(default_factory=list)
+
+
+class FreeTrialStatusOut(BaseModel):
+    enabled: bool = False
+    eligible: bool = False
+    days: int = 3
+    inbound_ids: list[int] = Field(default_factory=list)
+    reason: str | None = None
+
+
+class FreeTrialActivateResponse(BaseModel):
+    ok: bool
+    message: str
+    key_id: UUID
+    display_name: str
+    expires_at: datetime
+    connection_uri: str | None = None

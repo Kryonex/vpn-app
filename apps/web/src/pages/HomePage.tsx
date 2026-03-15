@@ -7,7 +7,13 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState } from '../components/StateCards';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
-import type { ReferralMe, SupportContact, SystemNewsList } from '../types/models';
+import type {
+  FreeTrialActivateResponse,
+  FreeTrialStatus,
+  ReferralMe,
+  SupportContact,
+  SystemNewsList,
+} from '../types/models';
 
 const onboardingSteps = [
   {
@@ -40,13 +46,15 @@ const faq = [
 ];
 
 export function HomePage() {
-  const { me, telegramProfile, systemStatus } = useAuth();
+  const { me, telegramProfile, systemStatus, refreshMe } = useAuth();
   const [referral, setReferral] = useState<ReferralMe | null>(null);
   const [support, setSupport] = useState<SupportContact | null>(null);
   const [news, setNews] = useState<SystemNewsList['items']>([]);
+  const [trialStatus, setTrialStatus] = useState<FreeTrialStatus | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [activatingTrial, setActivatingTrial] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -54,6 +62,7 @@ export function HomePage() {
     apiRequest<ReferralMe>('/referrals/me').then(setReferral).catch(() => null);
     apiRequest<SupportContact>('/support').then(setSupport).catch(() => null);
     apiRequest<SystemNewsList>('/system/news').then((data) => setNews(data.items)).catch(() => null);
+    apiRequest<FreeTrialStatus>('/system/free-trial').then(setTrialStatus).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -99,6 +108,16 @@ export function HomePage() {
       };
     }
 
+    if (trialStatus?.eligible) {
+      return {
+        title: 'Для вас доступен пробный период',
+        text: 'Нажмите кнопку ниже, чтобы активировать бесплатный доступ и сразу получить первый ключ без оплаты.',
+        to: '/keys',
+        label: 'Открыть ключи',
+        icon: KeyRound,
+      };
+    }
+
     return {
       title: 'Начните с выбора тарифа',
       text: 'В разделе «Купить» доступны тарифы и создание новой заявки. После оплаты мы активируем ваш первый ключ.',
@@ -106,7 +125,7 @@ export function HomePage() {
       label: 'Выбрать тариф',
       icon: Wallet,
     };
-  }, [me.active_keys_count]);
+  }, [me.active_keys_count, trialStatus?.eligible]);
 
   const dismissOnboarding = () => {
     window.localStorage.setItem(onboardingStorageKey, '1');
@@ -119,7 +138,31 @@ export function HomePage() {
     setMessage('Реферальная ссылка скопирована.');
   };
 
+  const activateTrial = async () => {
+    try {
+      setActivatingTrial(true);
+      setLocalError(null);
+      const response = await apiRequest<FreeTrialActivateResponse>('/system/free-trial/activate', {
+        method: 'POST',
+      });
+      await refreshMe();
+      const nextStatus = await apiRequest<FreeTrialStatus>('/system/free-trial');
+      setTrialStatus(nextStatus);
+      setMessage(response.message);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Не удалось активировать пробный период.');
+    } finally {
+      setActivatingTrial(false);
+    }
+  };
+
   const QuickIcon = quickIntent.icon;
+  const trialReasonText =
+    trialStatus?.reason === 'already_used'
+      ? 'Пробный период уже использовался.'
+      : trialStatus?.reason === 'already_has_subscription'
+        ? 'Пробный период доступен только до первой подписки.'
+        : null;
 
   return (
     <section className="stack">
@@ -151,6 +194,11 @@ export function HomePage() {
         <p className="hero-title welcome-line-1">{quickIntent.title}</p>
         <p className="hero-subtitle welcome-line-2">{quickIntent.text}</p>
         <div className="action-row">
+          {trialStatus?.eligible && (
+            <button className="btn btn-primary" onClick={() => void activateTrial()} disabled={activatingTrial}>
+              <Rocket size={16} /> {activatingTrial ? 'Активируем...' : `Получить пробный период на ${trialStatus.days} дн.`}
+            </button>
+          )}
           <Link className="btn btn-primary" to={quickIntent.to}>
             <QuickIcon size={16} /> {quickIntent.label}
           </Link>
@@ -158,6 +206,7 @@ export function HomePage() {
             <Wallet size={16} /> Купить или продлить
           </Link>
         </div>
+        {trialReasonText && <p className="muted">{trialReasonText}</p>}
       </article>
 
       <div className="stat-grid">

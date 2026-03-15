@@ -501,7 +501,7 @@ export function AdminPage() {
               method: 'PATCH',
               body: JSON.stringify({ inbound_ids: purchaseInboundIds }),
             });
-            await afterAction('Глобальные inbound’ы для платных подписок сохранены.');
+            await afterAction('Глобальные inbound’ы сохранены. Активные платные клиенты автоматически досинхронизированы в новые inbound’ы.');
           })}>
             <Wrench size={16} /> Сохранить inbound'ы
           </button>
@@ -627,7 +627,7 @@ export function AdminPage() {
         </label>
         <button className="btn btn-primary" onClick={() => void run(async () => {
           await apiRequest('/admin/plans', { method: 'POST', body: JSON.stringify({ ...newPlan, price: Number(newPlan.price) }) });
-          await afterAction('Тариф создан.');
+          await afterAction('Тариф создан. Новые подписки по нему будут сразу попадать в выбранные inbound’ы.');
           setNewPlan({ name: '', duration_days: 30, price: '990', currency: 'RUB', is_active: true, sort_order: 0, inbound_ids: [] });
         })}><Wallet size={16} /> Создать тариф</button>
         <div className="admin-list">
@@ -651,7 +651,7 @@ export function AdminPage() {
                 </label>
                 <div className="row-between">
                   <label className="toggle-row"><input type="checkbox" checked={draft.is_active} onChange={(e) => updatePlanDraft(plan.id, 'is_active', e.target.checked)} /><span>Активен</span></label>
-                  <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/plans/${plan.id}`, { method: 'PATCH', body: JSON.stringify({ ...draft, price: Number(draft.price) }) }); await afterAction('Тариф обновлён.'); })}>Сохранить</button>
+                  <button className="btn btn-ghost" onClick={() => void run(async () => { await apiRequest(`/admin/plans/${plan.id}`, { method: 'PATCH', body: JSON.stringify({ ...draft, price: Number(draft.price) }) }); await afterAction('Тариф обновлён. Активные клиенты этого тарифа автоматически досинхронизированы в новые inbound’ы.'); })}>Сохранить</button>
                 </div>
               </article>
             );
