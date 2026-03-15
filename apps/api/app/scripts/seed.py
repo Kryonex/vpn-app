@@ -16,16 +16,26 @@ DEFAULT_PLANS = [
     {'name': '6 months', 'duration_days': 180, 'price': Decimal('1499.00'), 'currency': 'RUB', 'sort_order': 30},
     {'name': '12 months', 'duration_days': 365, 'price': Decimal('2499.00'), 'currency': 'RUB', 'sort_order': 40},
 ]
+DEFAULT_PLANS_SEEDED_KEY = 'default_plans_seeded'
 
 
 async def seed() -> None:
     settings = get_settings()
     async with SessionLocal() as session:
-        for plan_data in DEFAULT_PLANS:
-            existing = await session.scalar(select(Plan).where(Plan.name == plan_data['name']))
-            if existing:
-                continue
-            session.add(Plan(**plan_data, is_active=True))
+        default_plans_seeded = await session.scalar(
+            select(AppSetting).where(AppSetting.key == DEFAULT_PLANS_SEEDED_KEY)
+        )
+        if not default_plans_seeded:
+            has_any_plan = await session.scalar(select(Plan.id).limit(1))
+            if not has_any_plan:
+                for plan_data in DEFAULT_PLANS:
+                    session.add(Plan(**plan_data, is_active=True))
+            session.add(
+                AppSetting(
+                    key=DEFAULT_PLANS_SEEDED_KEY,
+                    value='true',
+                )
+            )
 
         referral_setting = await session.scalar(
             select(AppSetting).where(AppSetting.key == 'referral_bonus_days')

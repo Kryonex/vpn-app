@@ -2044,3 +2044,30 @@ textarea.input {
     max-height: calc(100dvh - 22px - env(safe-area-inset-bottom));
   }
 }
+
+/* Buy page cleanup */
+.buy-section-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.buy-section-card::before,
+.buy-section-card::after,
+.plan-card-flat::before,
+.plan-card-flat::after {
+  display: none !important;
+}
+
+.buy-section-card,
+.plan-card-flat {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.buy-section-card .title-line,
+.plan-card-flat .title-line,
+.buy-section-card .muted,
+.plan-card-flat .muted {
+  text-shadow: none;
+}

@@ -166,7 +166,7 @@ export function BuyPlanPage() {
         </article>
       )}
 
-      <article className="glass-card liquid-panel">
+      <article className="glass-card liquid-panel buy-section-card">
         <div className="section-head">
           <div>
             <p className="title-line row-inline"><ReceiptText size={16} /> Продлить действующий доступ</p>
@@ -200,7 +200,7 @@ export function BuyPlanPage() {
         </div>
       </article>
 
-      <article className="glass-card liquid-panel">
+      <article className="glass-card liquid-panel buy-section-card">
         <div className="section-head">
           <div>
             <p className="title-line row-inline"><CircleDollarSign size={16} /> Новое подключение</p>
