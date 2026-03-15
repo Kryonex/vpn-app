@@ -175,7 +175,7 @@ export function BuyPlanPage() {
         </div>
         <div className="stack compact-stack">
           {renewableKeys.map((key) => (
-            <article key={key.id} className="plan-card compact-plan-card liquid-panel">
+            <article key={key.id} className="plan-card compact-plan-card plan-card-flat">
               <div className="row-between card-topline">
                 <div>
                   <p className="title-line">{key.display_name}</p>
@@ -209,7 +209,7 @@ export function BuyPlanPage() {
         </div>
         <div className="stack compact-stack">
           {!loading && !error && plans.map((plan) => (
-            <article key={plan.id} className="plan-card compact-plan-card liquid-panel">
+            <article key={plan.id} className="plan-card compact-plan-card plan-card-flat">
               <div className="row-between card-topline">
                 <div>
                   <p className="title-line">{plan.name}</p>

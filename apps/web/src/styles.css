@@ -1956,3 +1956,91 @@ textarea.input {
     font-size: 0.74rem;
   }
 }
+
+/* Modal, hero and plan-card fixes */
+.modal-backdrop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-card,
+.liquid-modal {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-bottom));
+  margin: auto 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hero-card {
+  display: grid;
+  gap: 10px;
+}
+
+.hero-subtitle {
+  margin: 0;
+  max-width: 34ch;
+}
+
+.compact-actions {
+  margin-top: 4px;
+  align-items: stretch;
+}
+
+.compact-actions .btn {
+  width: 100%;
+}
+
+.plan-card-flat {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.045));
+  border: 1px solid rgba(255,255,255,0.09);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+}
+
+.plan-card-flat::before,
+.plan-card-flat::after {
+  display: none;
+}
+
+.plan-card-flat > * {
+  z-index: 1;
+}
+
+.plan-card-flat .btn {
+  margin-top: 2px;
+}
+
+.buy-mode-card::after,
+.news-card::after {
+  opacity: 0.45;
+}
+
+@media (max-width: 480px) {
+  .hero-card {
+    gap: 9px;
+  }
+
+  .hero-subtitle {
+    max-width: none;
+    line-height: 1.44;
+  }
+
+  .compact-actions {
+    margin-top: 6px;
+  }
+
+  .modal-backdrop {
+    padding-top: 10px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .modal-card,
+  .liquid-modal {
+    max-height: calc(100dvh - 22px - env(safe-area-inset-bottom));
+  }
+}
