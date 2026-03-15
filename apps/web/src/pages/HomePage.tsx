@@ -272,31 +272,6 @@ export function HomePage() {
         </div>
       </article>
 
-      <article className="glass-card account-section liquid-panel">
-        <div className="section-head">
-          <div>
-            <p className="title-line row-inline"><Newspaper size={16} /> Последние новости</p>
-            <p className="muted">Короткий обзор самого важного. Полная лента находится в отдельной вкладке.</p>
-          </div>
-          <Link className="btn btn-ghost btn-inline" to="/news">Открыть все</Link>
-        </div>
-        {latestNews.length ? (
-          <div className="stack compact-stack">
-            {latestNews.map((item) => (
-              <article key={item.id} className="admin-item zero-news-preview">
-                <div className="row-between">
-                  <p className="title-line">{item.title}</p>
-                  <span className="chip">{new Date(item.created_at).toLocaleDateString()}</span>
-                </div>
-                <p className="muted">{item.body}</p>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="muted">Пока новостей нет. Здесь будут появляться анонсы и полезные обновления.</p>
-        )}
-      </article>
-
       {systemStatus?.maintenance_mode && (
         <article className="glass-card liquid-panel">
           <p className="title-line">Сервис временно ограничен</p>
