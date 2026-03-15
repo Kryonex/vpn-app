@@ -207,10 +207,28 @@ class AdminService:
         return {'inbound_ids': await self.access_policy.get_purchase_inbound_ids()}
 
     async def set_purchase_inbound_settings(self, inbound_ids: list[int]) -> dict[str, object]:
+        previous_global_inbound_ids = await self.access_policy.get_purchase_inbound_ids()
         saved = await self.access_policy.set_purchase_inbound_ids(inbound_ids)
-        await self._sync_existing_paid_keys_to_inbounds(saved)
+        await self._sync_existing_paid_keys_to_inbounds(
+            saved,
+            previous_global_inbound_ids=previous_global_inbound_ids,
+        )
         await self.session.commit()
         return {'inbound_ids': saved}
+
+    async def resync_purchase_inbound_settings(self) -> dict[str, object]:
+        current_inbound_ids = await self.access_policy.get_purchase_inbound_ids()
+        synced = await self._sync_existing_paid_keys_to_inbounds(current_inbound_ids)
+        await self.session.commit()
+        logger.info(
+            'Purchase inbound resync requested manually: target=%s synced_keys=%s',
+            current_inbound_ids,
+            synced,
+        )
+        return {
+            'inbound_ids': current_inbound_ids,
+            'synced_keys': synced,
+        }
 
     async def get_free_trial_settings(self) -> dict[str, object]:
         return await self.access_policy.get_free_trial_settings()
@@ -524,7 +542,12 @@ class AdminService:
         setattr(plan, 'inbound_ids', await self.access_policy.get_plan_inbound_ids(plan.id))
         return plan
 
-    async def _sync_existing_paid_keys_to_inbounds(self, inbound_ids: list[int]) -> int:
+    async def _sync_existing_paid_keys_to_inbounds(
+        self,
+        inbound_ids: list[int],
+        *,
+        previous_global_inbound_ids: list[int] | None = None,
+    ) -> int:
         keys = (
             await self.session.scalars(
                 select(VPNKey)
@@ -535,14 +558,28 @@ class AdminService:
             )
         ).all()
 
+        normalized_target = sorted({int(item) for item in inbound_ids if int(item) > 0})
+        previous_global = sorted({int(item) for item in (previous_global_inbound_ids or []) if int(item) > 0})
+        plan_inbound_map = await self.access_policy.get_plan_inbound_map()
+        inherited_plan_ids_to_update: set[str] = set()
         synced = 0
         for key in keys:
             if not key.current_subscription or not key.current_subscription.plan:
                 continue
             if key.current_subscription.plan.name == self.access_policy.FREE_TRIAL_PLAN_NAME:
                 continue
-            plan_specific = await self.access_policy.get_plan_inbound_ids(key.current_subscription.plan.id)
+
+            plan_id_str = str(key.current_subscription.plan.id)
+            plan_specific = plan_inbound_map.get(plan_id_str, [])
+            target_inbound_ids = normalized_target
             if plan_specific:
+                if previous_global and sorted(plan_specific) == previous_global:
+                    inherited_plan_ids_to_update.add(plan_id_str)
+                    target_inbound_ids = normalized_target
+                else:
+                    continue
+
+            if not target_inbound_ids:
                 continue
 
             active_version = next((item for item in key.versions if item.is_active), None)
@@ -552,9 +589,20 @@ class AdminService:
             if await self.threexui_service.ensure_version_inbounds(
                 active_version,
                 expires_at=key.current_subscription.expires_at,
-                inbound_ids=inbound_ids,
+                inbound_ids=target_inbound_ids,
             ):
                 synced += 1
+
+        for plan_id_str in inherited_plan_ids_to_update:
+            await self.access_policy.set_plan_inbound_ids(UUID(plan_id_str), normalized_target)
+
+        if inherited_plan_ids_to_update or synced:
+            logger.info(
+                'Purchase inbound sync completed: target=%s synced_keys=%s inherited_plans_updated=%s',
+                normalized_target,
+                synced,
+                len(inherited_plan_ids_to_update),
+            )
         return synced
 
     async def _sync_existing_plan_keys_to_inbounds(self, plan_id: UUID, inbound_ids: list[int]) -> int:

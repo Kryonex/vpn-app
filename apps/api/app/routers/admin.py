@@ -382,6 +382,15 @@ async def admin_patch_purchase_inbounds(
     return PurchaseInboundSettingsOut(**await service.set_purchase_inbound_settings(payload.inbound_ids))
 
 
+@router.post('/system/purchase-inbounds/resync')
+async def admin_resync_purchase_inbounds(
+    session: AsyncSession = Depends(get_session),
+    threexui_service: ThreeXUIService = Depends(threexui_dependency),
+):
+    service = AdminService(session, threexui_service)
+    return await service.resync_purchase_inbound_settings()
+
+
 @router.get('/system/free-trial', response_model=FreeTrialSettingsOut)
 async def admin_get_free_trial_settings(
     session: AsyncSession = Depends(get_session),

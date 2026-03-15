@@ -505,6 +505,14 @@ export function AdminPage() {
           })}>
             <Wrench size={16} /> Сохранить inbound'ы
           </button>
+          <button className="btn btn-ghost" onClick={() => void run(async () => {
+            const result = await apiRequest<{ synced_keys: number; inbound_ids: number[] }>('/admin/system/purchase-inbounds/resync', {
+              method: 'POST',
+            });
+            await afterAction(`Пересинхронизация завершена. Досинхронизировано клиентов: ${result.synced_keys}.`);
+          })}>
+            <Wrench size={16} /> Пересинхронизировать клиентов
+          </button>
           <div className="divider" />
           <div className="toggle-list">
             <label className="toggle-row">
