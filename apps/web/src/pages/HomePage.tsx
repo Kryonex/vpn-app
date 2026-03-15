@@ -1,5 +1,5 @@
 ﻿import {
-  ChevronDown, CircleHelp, Copy, Gift, KeyRound, Newspaper, Rocket, ShieldCheck, Sparkles, Wallet, Zap, X,
+  CircleHelp, Copy, Gift, KeyRound, Newspaper, Rocket, ShieldCheck, Sparkles, Wallet, Zap, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -54,6 +54,7 @@ export function HomePage() {
   const [news, setNews] = useState<SystemNewsList['items']>([]);
   const [trialStatus, setTrialStatus] = useState<FreeTrialStatus | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [metricInfo, setMetricInfo] = useState<'keys' | 'bonus' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [activatingTrial, setActivatingTrial] = useState(false);
@@ -75,10 +76,10 @@ export function HomePage() {
   }, [me]);
 
   useEffect(() => {
-    const modalOpen = helpOpen || showOnboarding;
+    const modalOpen = helpOpen || showOnboarding || Boolean(metricInfo);
     document.body.classList.toggle('modal-open', modalOpen);
     return () => document.body.classList.remove('modal-open');
-  }, [helpOpen, showOnboarding]);
+  }, [helpOpen, showOnboarding, metricInfo]);
 
   if (!me) {
     return <EmptyState title="Не удалось загрузить ZERO" text="Попробуйте заново открыть мини-приложение." />;
@@ -174,9 +175,9 @@ export function HomePage() {
       <SystemStatusBanner status={systemStatus} />
       {localError && <ErrorState text={localError} />}
 
-      <article className="hero-card zero-hero welcome-enter">
+      <article className="hero-card zero-hero welcome-enter compact-hero">
         <div className="zero-brand">ZERO</div>
-        <div className="profile-row">
+        <div className="profile-row compact-profile-row">
           {avatar ? (
             <img className="profile-avatar" src={avatar} alt="Аватар" />
           ) : (
@@ -187,10 +188,22 @@ export function HomePage() {
             <p className="profile-username">{username ? `@${username}` : 'Аккаунт Telegram'}</p>
           </div>
         </div>
+        <div className="metric-pills">
+          <button className="metric-pill" onClick={() => setMetricInfo('keys')}>
+            <span className="metric-pill-icon"><Zap size={14} /></span>
+            <span className="metric-pill-value">{me.active_keys_count}</span>
+            <span className="metric-pill-label">доступы</span>
+          </button>
+          <button className="metric-pill" onClick={() => setMetricInfo('bonus')}>
+            <span className="metric-pill-icon"><Sparkles size={14} /></span>
+            <span className="metric-pill-value">{me.bonus_days_balance}</span>
+            <span className="metric-pill-label">бонусы</span>
+          </button>
+        </div>
         <p className="hero-label greeting-chip">Добро пожаловать</p>
         <p className="hero-title welcome-line-1">{quickIntent.title}</p>
         <p className="hero-subtitle welcome-line-2">{quickIntent.text}</p>
-        <div className="action-row">
+        <div className="action-row compact-actions">
           {trialStatus?.eligible && (
             <button className="btn btn-primary" onClick={() => void activateTrial()} disabled={activatingTrial}>
               <Rocket size={16} /> {activatingTrial ? 'Активируем...' : `Пробный период на ${trialStatus.days} дн.`}
@@ -206,20 +219,7 @@ export function HomePage() {
         {trialReasonText && <p className="muted">{trialReasonText}</p>}
       </article>
 
-      <div className="stat-grid">
-        <article className="glass-card stat-card liquid-panel">
-          <span className="stat-icon"><Zap size={16} /></span>
-          <p className="stat-label">Активные доступы</p>
-          <p className="stat-value">{me.active_keys_count}</p>
-        </article>
-        <article className="glass-card stat-card liquid-panel">
-          <span className="stat-icon"><Sparkles size={16} /></span>
-          <p className="stat-label">Бонусные дни</p>
-          <p className="stat-value">{me.bonus_days_balance}</p>
-        </article>
-      </div>
-
-      <article className="glass-card quick-summary liquid-panel">
+      <article className="glass-card quick-summary liquid-panel compact-summary-card">
         <div>
           <p className="muted">Ближайшее окончание</p>
           <p className="title-line">{nearestExpiry}</p>
@@ -277,6 +277,25 @@ export function HomePage() {
           <p className="title-line">Сервис временно ограничен</p>
           <p className="muted">Во время технических работ активация и управление доступом могут быть временно недоступны.</p>
         </article>
+      )}
+
+      {metricInfo && (
+        <div className="modal-backdrop" onClick={() => setMetricInfo(null)}>
+          <div className="modal-card liquid-modal metric-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="row-between">
+              <div>
+                <p className="title-line">{metricInfo === 'keys' ? 'Активные доступы' : 'Бонусные дни'}</p>
+                <p className="muted">{metricInfo === 'keys' ? 'Короткое объяснение текущего статуса доступа.' : 'Короткое объяснение бонусного баланса.'}</p>
+              </div>
+              <button className="icon-button" onClick={() => setMetricInfo(null)}><X size={16} /></button>
+            </div>
+            <p className="muted">
+              {metricInfo === 'keys'
+                ? 'Это количество активных подключений ZERO, которыми можно пользоваться прямо сейчас. Нажмите на кнопку открытия доступа, чтобы посмотреть детали и ссылку подключения.'
+                : 'Это запас бесплатных дней, который можно использовать при следующем продлении. Бонусы начисляются за приглашения и специальные акции.'}
+            </p>
+          </div>
+        </div>
       )}
 
       {helpOpen && (
