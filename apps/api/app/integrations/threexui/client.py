@@ -47,6 +47,12 @@ class ThreeXUIClient:
         return None
 
     @staticmethod
+    def _json_stringify_if_needed(value: Any) -> Any:
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False)
+        return value
+
+    @staticmethod
     def _extract_connection_uri(obj: Any) -> str | None:
         known_keys = {
             'link',
@@ -276,6 +282,75 @@ class ThreeXUIClient:
                 continue
         return None
 
+    async def _upsert_client_via_inbound_update(
+        self,
+        *,
+        inbound_id: int,
+        client_payload: dict[str, Any],
+    ) -> None:
+        inbound = await self.get_inbound_data(inbound_id)
+        if not inbound:
+            raise RuntimeError(f'Inbound {inbound_id} not found')
+
+        settings_obj = self._parse_json_field(inbound.get('settings'))
+        if not isinstance(settings_obj, dict):
+            settings_obj = {}
+        clients = settings_obj.get('clients')
+        if not isinstance(clients, list):
+            clients = []
+
+        updated_clients: list[dict[str, Any]] = []
+        replaced = False
+        target_id = str(client_payload.get('id') or '').strip()
+        target_email = str(client_payload.get('email') or '').strip()
+        for item in clients:
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get('id') or '').strip()
+            item_email = str(item.get('email') or '').strip()
+            if (target_id and item_id == target_id) or (target_email and item_email == target_email):
+                updated_clients.append(client_payload)
+                replaced = True
+            else:
+                updated_clients.append(item)
+
+        if not replaced:
+            updated_clients.append(client_payload)
+
+        settings_obj['clients'] = updated_clients
+
+        payload = {
+            'id': inbound_id,
+            'up': inbound.get('up', 0),
+            'down': inbound.get('down', 0),
+            'total': inbound.get('total', 0),
+            'remark': inbound.get('remark', ''),
+            'enable': inbound.get('enable', True),
+            'expiryTime': inbound.get('expiryTime', 0),
+            'listen': inbound.get('listen', ''),
+            'port': inbound.get('port'),
+            'protocol': inbound.get('protocol'),
+            'settings': json.dumps(settings_obj, ensure_ascii=False),
+            'streamSettings': self._json_stringify_if_needed(inbound.get('streamSettings')),
+            'sniffing': self._json_stringify_if_needed(inbound.get('sniffing')),
+            'allocate': self._json_stringify_if_needed(inbound.get('allocate')),
+        }
+
+        for optional_key in ('tag', 'domain', 'fallbacks'):
+            value = inbound.get(optional_key)
+            if value not in (None, ''):
+                payload[optional_key] = self._json_stringify_if_needed(value)
+
+        await self._request_with_fallback(
+            'POST',
+            [
+                f'/panel/api/inbounds/update/{inbound_id}',
+                '/panel/api/inbounds/update',
+                f'/xui/API/inbounds/update/{inbound_id}',
+            ],
+            json=payload,
+        )
+
     @staticmethod
     def _extract_clients_from_inbound(inbound_obj: dict[str, Any]) -> list[dict[str, Any]]:
         clients: list[dict[str, Any]] = []
@@ -464,6 +539,27 @@ class ThreeXUIClient:
             if snapshot and snapshot.connection_uri:
                 break
             await asyncio.sleep(0.35)
+
+        if not snapshot:
+            logger.warning(
+                '3x-ui addClient did not materialize client_uuid=%s inbound_id=%s, fallback to inbound update',
+                client_uuid,
+                inbound_id,
+            )
+            await self._upsert_client_via_inbound_update(
+                inbound_id=inbound_id,
+                client_payload=client_payload,
+            )
+            for _ in range(4):
+                snapshot = await self.get_client_snapshot(
+                    inbound_id=inbound_id,
+                    client_uuid=client_uuid,
+                    email_remark=email_remark,
+                    fallback_sub_id=sub_id,
+                )
+                if snapshot:
+                    break
+                await asyncio.sleep(0.35)
 
         connection_uri = snapshot.connection_uri if snapshot else self._build_subscription_url(sub_id, client_uuid)
 

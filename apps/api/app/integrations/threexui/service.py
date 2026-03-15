@@ -118,6 +118,12 @@ class ThreeXUIService:
             if not version.connection_uri and created.connection_uri:
                 version.connection_uri = created.connection_uri
             changed = True
+            logger.info(
+                '3x-ui inbound sync added client_uuid=%s into inbound_id=%s from source_inbound_id=%s',
+                version.threexui_client_uuid,
+                inbound_id,
+                source_inbound_id,
+            )
 
         raw_config = version.raw_config if isinstance(version.raw_config, dict) else {}
         merged_inbound_ids = sorted({*current_inbound_ids, *requested_inbound_ids})
