@@ -39,7 +39,7 @@ def mini_app_keyboard() -> InlineKeyboardMarkup | None:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='Открыть VPN-приложение',
+                    text='Открыть ZERO',
                     web_app=WebAppInfo(url=settings.mini_app_url),
                 )
             ]
@@ -63,9 +63,12 @@ async def start_handler(message: Message) -> None:
             referral_code=referral_code,
         )
 
+    first_name = message.from_user.first_name.strip() if message.from_user.first_name else 'друг'
     text = (
-        'VPN-сервис готов к работе.\n\n'
-        'Откройте Mini App: там можно купить или продлить подписку, управлять ключами и смотреть платежи.'
+        f'Здравствуйте, {first_name}.\n\n'
+        'ZERO уже готов к работе.\n'
+        'В мини-приложении можно подключить ускорение, продлить доступ, открыть свои конфигурации и проверить заявки.\n\n'
+        'Нажмите кнопку ниже, чтобы перейти в ZERO.'
     )
     await message.answer(text, reply_markup=mini_app_keyboard())
 
