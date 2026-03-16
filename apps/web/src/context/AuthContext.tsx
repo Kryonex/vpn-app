@@ -8,6 +8,7 @@ type AuthState = {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isExternalBrowser: boolean;
   telegramProfile: TGUser | null;
   me: MeResponse | null;
   systemStatus: SystemStatus | null;
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [telegramProfile, setTelegramProfile] = useState<TGUser | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isExternalBrowser, setIsExternalBrowser] = useState(false);
   const configuredAdminId = Number(import.meta.env.VITE_TELEGRAM_ADMIN_ID || 0) || 0;
 
   const refreshMe = async () => {
@@ -79,7 +81,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
 
           if (!initData) {
-            throw new Error('Отсутствует Telegram initData. Откройте приложение через Telegram или задайте VITE_DEV_INIT_DATA.');
+            setIsExternalBrowser(true);
+            throw new Error('Отсутствует Telegram initData. Откройте приложение через Telegram.');
           }
 
           const auth = await apiRequest<{ access_token: string }>(
@@ -99,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         await refreshMe();
         await refreshSystemStatusSafe();
+        setIsExternalBrowser(false);
         setError(null);
       } catch (err) {
         clearAccessToken();
@@ -131,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isAuthenticated: Boolean(me),
       isAdmin,
+      isExternalBrowser,
       telegramProfile,
       me,
       systemStatus,
@@ -138,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshMe,
       refreshSystemStatus,
     }),
-    [error, isAdmin, isLoading, me, systemStatus, telegramProfile],
+    [error, isAdmin, isExternalBrowser, isLoading, me, systemStatus, telegramProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

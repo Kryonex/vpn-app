@@ -13,7 +13,7 @@ import { NewsPage } from './pages/NewsPage';
 import { RenewKeyPage } from './pages/RenewKeyPage';
 
 export default function App() {
-  const { isLoading, isAuthenticated, isAdmin, error } = useAuth();
+  const { isLoading, isAuthenticated, isAdmin, isExternalBrowser, error } = useAuth();
 
   const shell = (content: ReactNode, withNav = false) => (
     <div className="app-frame zero-frame">
@@ -33,6 +33,24 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
+    if (isExternalBrowser) {
+      return shell(
+        <section className="browser-cover">
+          <div className="browser-cover-logo">ZERO</div>
+          <div className="browser-cover-mark" aria-hidden="true" />
+          <div className="browser-cover-copy">
+            <h1>ZERO</h1>
+            <p>Похоже, эта страница открыта вне Telegram. Для обычного браузера здесь доступна только нейтральная заставка.</p>
+          </div>
+          <div className="browser-cover-actions">
+            <a className="btn btn-primary browser-cover-btn" href="https://www.google.com/" target="_blank" rel="noreferrer">
+              Перейти в Google
+            </a>
+          </div>
+        </section>,
+      );
+    }
+
     return shell(
       <section className="stack">
         <h1>Нужна авторизация</h1>
