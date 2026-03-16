@@ -1,5 +1,5 @@
-п»їimport {
-  CircleHelp, Copy, Gift, KeyRound, Newspaper, Rocket, ShieldCheck, Sparkles, Wallet, Zap, X,
+import {
+  CircleHelp, Copy, FileText, Gift, KeyRound, Newspaper, Rocket, ShieldCheck, Sparkles, Wallet, Zap, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState } from '../components/StateCards';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
+import { openTelegramPage } from '../telegram';
 import type {
   FreeTrialActivateResponse,
   FreeTrialStatus,
@@ -19,31 +20,31 @@ import type {
 
 const onboardingSteps = [
   {
-    title: 'Р­С‚Рѕ РІР°С€ С†РµРЅС‚СЂ СѓРїСЂР°РІР»РµРЅРёСЏ ZERO',
-    text: 'Р—РґРµСЃСЊ РІРёРґРЅРѕ Р°РєС‚РёРІРЅС‹Р№ РґРѕСЃС‚СѓРї, Р±РѕРЅСѓСЃРЅС‹Рµ РґРЅРё, РїСЂРёРіР»Р°С€РµРЅРёСЏ, РЅРѕРІРѕСЃС‚Рё Рё Р±С‹СЃС‚СЂС‹Рµ РґРµР№СЃС‚РІРёСЏ. Р•СЃР»Рё РІС‹ РѕС‚РєСЂС‹Р»Рё ZERO РІРїРµСЂРІС‹Рµ, РЅР°С‡РЅРёС‚Рµ РѕС‚СЃСЋРґР°.',
+    title: 'Это ваш центр управления ZERO',
+    text: 'Здесь видно активный доступ, бонусные дни, приглашения, новости и быстрые действия. Если вы открыли ZERO впервые, начните отсюда.',
   },
   {
-    title: 'Р”РѕСЃС‚СѓРїС‹ РЅР°С…РѕРґСЏС‚СЃСЏ РІРЅСѓС‚СЂРё РєР°Р±РёРЅРµС‚Р°',
-    text: 'РћС‚РєСЂРѕР№С‚Рµ РґРѕСЃС‚СѓРїС‹, С‡С‚РѕР±С‹ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ РїРѕРґРєР»СЋС‡РµРЅРёСЏ, РїРѕСЃРјРѕС‚СЂРµС‚СЊ СЃСЂРѕРє РґРµР№СЃС‚РІРёСЏ, РїСЂРѕРґР»РёС‚СЊ РёР»Рё РїРµСЂРµРІС‹РїСѓСЃС‚РёС‚СЊ РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ.',
+    title: 'Доступы находятся внутри кабинета',
+    text: 'Откройте доступы, чтобы скопировать ссылку подключения, посмотреть срок действия, продлить или перевыпустить конфигурацию.',
   },
   {
-    title: 'РџРѕРєСѓРїРєР° Рё РїСЂРѕРґР»РµРЅРёРµ РІ РѕРґРЅРѕРј РјРµСЃС‚Рµ',
-    text: 'Р’Рѕ РІРєР»Р°РґРєРµ В«РљСѓРїРёС‚СЊВ» СЃРѕР±СЂР°РЅС‹ С‚Р°СЂРёС„С‹, Р·Р°СЏРІРєРё Рё РёСЃС‚РѕСЂРёСЏ. Р•СЃР»Рё РїСЂСЏРјС‹Рµ РїР»Р°С‚РµР¶Рё РѕС‚РєР»СЋС‡РµРЅС‹, ZERO СЃСЂР°Р·Сѓ РїРµСЂРµРІРµРґС‘С‚ РІР°СЃ Рє Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ.',
+    title: 'Покупка и продление в одном месте',
+    text: 'Во вкладке «Купить» собраны тарифы, заявки и история. Если прямые платежи отключены, ZERO сразу переведёт вас к администратору.',
   },
 ];
 
 const faq = [
   {
-    question: 'РљР°Рє РїРѕРґРєР»СЋС‡РёС‚СЊ СѓСЃРєРѕСЂРёС‚РµР»СЊ?',
-    answer: 'РћС‚РєСЂРѕР№С‚Рµ РЅСѓР¶РЅС‹Р№ РґРѕСЃС‚СѓРї, СЃРєРѕРїРёСЂСѓР№С‚Рµ СЃСЃС‹Р»РєСѓ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РёР»Рё РЅР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ Р±С‹СЃС‚СЂРѕРіРѕ РґРѕР±Р°РІР»РµРЅРёСЏ РІ РїСЂРёР»РѕР¶РµРЅРёРµ Happ.',
+    question: 'Как подключить ускоритель?',
+    answer: 'Откройте нужный доступ, скопируйте ссылку подключения или нажмите кнопку быстрого добавления в приложение Happ.',
   },
   {
-    question: 'РљР°Рє РїСЂРѕРґР»РёС‚СЊ РґРѕСЃС‚СѓРї?',
-    answer: 'РџРµСЂРµР№РґРёС‚Рµ РІ СЂР°Р·РґРµР» РїРѕРєСѓРїРєРё, СЃРѕР·РґР°Р№С‚Рµ Р·Р°СЏРІРєСѓ РЅР° РїСЂРѕРґР»РµРЅРёРµ Рё РґРѕР¶РґРёС‚РµСЃСЊ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ. РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ РѕР±РЅРѕРІРёС‚СЃСЏ Р±РµР· Р»РёС€РЅРёС… С€Р°РіРѕРІ.',
+    question: 'Как продлить доступ?',
+    answer: 'Перейдите в раздел покупки, создайте заявку на продление и дождитесь подтверждения. Срок действия обновится без лишних шагов.',
   },
   {
-    question: 'Р§С‚Рѕ РґРµР»Р°С‚СЊ, РµСЃР»Рё СѓСЃРєРѕСЂРµРЅРёРµ РЅРµ СЂР°Р±РѕС‚Р°РµС‚?',
-    answer: 'РћС‚РєСЂРѕР№С‚Рµ РєР°СЂС‚РѕС‡РєСѓ РґРѕСЃС‚СѓРїР° Рё РїРµСЂРµРІС‹РїСѓСЃС‚РёС‚Рµ РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ. Р•СЃР»Рё РїСЂРѕР±Р»РµРјР° РѕСЃС‚Р°РЅРµС‚СЃСЏ, РЅР°РїРёС€РёС‚Рµ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ С‡РµСЂРµР· РѕРєРЅРѕ РїРѕРјРѕС‰Рё.',
+    question: 'Что делать, если ускорение не работает?',
+    answer: 'Откройте карточку доступа и перевыпустите конфигурацию. Если проблема останется, напишите администратору через окно помощи.',
   },
 ];
 
@@ -82,44 +83,45 @@ export function HomePage() {
   }, [helpOpen, showOnboarding, metricInfo]);
 
   if (!me) {
-    return <EmptyState title="РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ ZERO" text="РџРѕРїСЂРѕР±СѓР№С‚Рµ Р·Р°РЅРѕРІРѕ РѕС‚РєСЂС‹С‚СЊ РјРёРЅРё-РїСЂРёР»РѕР¶РµРЅРёРµ." />;
+    return <EmptyState title="Не удалось загрузить ZERO" text="Попробуйте заново открыть мини-приложение." />;
   }
 
   const nearestExpiry = me.nearest_expiry
     ? new Date(me.nearest_expiry).toLocaleString()
-    : 'РђРєС‚РёРІРЅС‹Р№ РґРѕСЃС‚СѓРї РїРѕРєР° РЅРµ РЅР°Р№РґРµРЅ';
-  const displayName = telegramProfile?.first_name || me.telegram?.first_name || me.telegram?.username || 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ';
+    : 'Активный доступ пока не найден';
+  const displayName = telegramProfile?.first_name || me.telegram?.first_name || me.telegram?.username || 'Пользователь';
   const username = telegramProfile?.username || me.telegram?.username || null;
   const avatar = telegramProfile?.photo_url || null;
   const onboardingStorageKey = `onboarding_seen_${me.id}`;
   const latestNews = news.slice(0, 2);
+  const infoUrl = `${window.location.origin}/info.html`;
 
   const quickIntent = useMemo(() => {
     if (me.active_keys_count > 0) {
       return {
-        title: 'РЈСЃРєРѕСЂРµРЅРёРµ СѓР¶Рµ Р°РєС‚РёРІРЅРѕ',
-        text: 'РћС‚РєСЂРѕР№С‚Рµ РґРѕСЃС‚СѓРїС‹, С‡С‚РѕР±С‹ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ, РїСЂРѕРІРµСЂРёС‚СЊ СЃСЂРѕРє Рё РѕР±РЅРѕРІРёС‚СЊ РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ.',
+        title: 'Ускорение уже активно',
+        text: 'Откройте доступы, чтобы скопировать ссылку, проверить срок и обновить конфигурацию.',
         to: '/keys',
-        label: 'РћС‚РєСЂС‹С‚СЊ РґРѕСЃС‚СѓРїС‹',
+        label: 'Открыть доступы',
         icon: KeyRound,
       };
     }
 
     if (trialStatus?.eligible) {
       return {
-        title: 'Р”Р»СЏ РІР°СЃ РґРѕСЃС‚СѓРїРµРЅ РїСЂРѕР±РЅС‹Р№ РїРµСЂРёРѕРґ',
-        text: 'РђРєС‚РёРІРёСЂСѓР№С‚Рµ Р±РµСЃРїР»Р°С‚РЅС‹Рµ РґРЅРё Рё СЃСЂР°Р·Сѓ РїРѕР»СѓС‡РёС‚Рµ РїРµСЂРІС‹Р№ РґРѕСЃС‚СѓРї Р±РµР· РѕРїР»Р°С‚С‹.',
+        title: 'Для вас доступен пробный период',
+        text: 'Активируйте бесплатные дни и сразу получите первый доступ без оплаты.',
         to: '/keys',
-        label: 'РћС‚РєСЂС‹С‚СЊ РґРѕСЃС‚СѓРїС‹',
+        label: 'Открыть доступы',
         icon: KeyRound,
       };
     }
 
     return {
-      title: 'РџРѕРґРєР»СЋС‡РёС‚Рµ ZERO Р·Р° РїР°СЂСѓ С€Р°РіРѕРІ',
-      text: 'Р’С‹Р±РµСЂРёС‚Рµ С‚Р°СЂРёС„, СЃРѕР·РґР°Р№С‚Рµ Р·Р°СЏРІРєСѓ Рё РїСЂРѕРґРѕР»Р¶Р°Р№С‚Рµ РѕС„РѕСЂРјР»РµРЅРёРµ РІ СѓРґРѕР±РЅРѕРј РґР»СЏ РІР°СЃ СЂРµР¶РёРјРµ.',
+      title: 'Подключите ZERO за пару шагов',
+      text: 'Выберите тариф, создайте заявку и продолжайте оформление в удобном для вас режиме.',
       to: '/buy',
-      label: 'Р’С‹Р±СЂР°С‚СЊ С‚Р°СЂРёС„',
+      label: 'Выбрать тариф',
       icon: Wallet,
     };
   }, [me.active_keys_count, trialStatus?.eligible]);
@@ -132,7 +134,7 @@ export function HomePage() {
   const copyReferral = async () => {
     if (!referral?.referral_link) return;
     await navigator.clipboard.writeText(referral.referral_link);
-    setMessage('РЎСЃС‹Р»РєР° РїСЂРёРіР»Р°С€РµРЅРёСЏ СЃРєРѕРїРёСЂРѕРІР°РЅР°.');
+    setMessage('Ссылка приглашения скопирована.');
   };
 
   const activateTrial = async () => {
@@ -147,7 +149,7 @@ export function HomePage() {
       setTrialStatus(nextStatus);
       setMessage(response.message);
     } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р°РєС‚РёРІРёСЂРѕРІР°С‚СЊ РїСЂРѕР±РЅС‹Р№ РїРµСЂРёРѕРґ.');
+      setLocalError(err instanceof Error ? err.message : 'Не удалось активировать пробный период.');
     } finally {
       setActivatingTrial(false);
     }
@@ -156,20 +158,35 @@ export function HomePage() {
   const QuickIcon = quickIntent.icon;
   const trialReasonText =
     trialStatus?.reason === 'already_used'
-      ? 'РџСЂРѕР±РЅС‹Р№ РїРµСЂРёРѕРґ СѓР¶Рµ РёСЃРїРѕР»СЊР·РѕРІР°Р»СЃСЏ.'
+      ? 'Пробный период уже использовался.'
       : trialStatus?.reason === 'already_has_subscription'
-        ? 'РџСЂРѕР±РЅС‹Р№ РїРµСЂРёРѕРґ РґРѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ РґРѕ РїРµСЂРІРѕР№ РїР»Р°С‚РЅРѕР№ Р°РєС‚РёРІР°С†РёРё.'
+        ? 'Пробный период доступен только до первой платной активации.'
         : null;
 
   return (
     <section className="stack">
       <PageHeader
-        title="Р›РёС‡РЅС‹Р№ РєР°Р±РёРЅРµС‚"
-        subtitle="РЈРїСЂР°РІР»РµРЅРёРµ РґРѕСЃС‚СѓРїРѕРј, Р±РѕРЅСѓСЃР°РјРё Рё РЅРѕРІРѕСЃС‚СЏРјРё Р±РµР· Р»РёС€РЅРµРіРѕ С€СѓРјР°"
+        title="Личный кабинет"
+        subtitle="Управление доступом, бонусами и новостями без лишнего шума"
         action={
-          <button className="page-header-chip page-header-button" onClick={() => setHelpOpen(true)} aria-label="РћС‚РєСЂС‹С‚СЊ РїРѕРјРѕС‰СЊ">
-            <CircleHelp size={16} />
-          </button>
+          <div className="page-header-actions">
+            <button
+              className="page-header-chip page-header-button"
+              onClick={() => openTelegramPage(infoUrl)}
+              aria-label="Открыть информацию"
+              title="Информация"
+            >
+              <FileText size={16} />
+            </button>
+            <button
+              className="page-header-chip page-header-button"
+              onClick={() => setHelpOpen(true)}
+              aria-label="Открыть помощь"
+              title="Помощь"
+            >
+              <CircleHelp size={16} />
+            </button>
+          </div>
         }
       />
       <SystemStatusBanner status={systemStatus} />
@@ -179,41 +196,41 @@ export function HomePage() {
 
         <div className="profile-row compact-profile-row">
           {avatar ? (
-            <img className="profile-avatar" src={avatar} alt="РђРІР°С‚Р°СЂ" />
+            <img className="profile-avatar" src={avatar} alt="Аватар" />
           ) : (
             <div className="profile-avatar profile-avatar-fallback">{displayName.slice(0, 1).toUpperCase()}</div>
           )}
           <div>
             <p className="profile-name">{displayName}</p>
-            <p className="profile-username">{username ? `@${username}` : 'РђРєРєР°СѓРЅС‚ Telegram'}</p>
+            <p className="profile-username">{username ? `@${username}` : 'Аккаунт Telegram'}</p>
           </div>
         </div>
         <div className="metric-pills">
           <button className="metric-pill" onClick={() => setMetricInfo('keys')}>
             <span className="metric-pill-icon"><Zap size={14} /></span>
             <span className="metric-pill-value">{me.active_keys_count}</span>
-            <span className="metric-pill-label">РґРѕСЃС‚СѓРїС‹</span>
+            <span className="metric-pill-label">доступы</span>
           </button>
           <button className="metric-pill" onClick={() => setMetricInfo('bonus')}>
             <span className="metric-pill-icon"><Sparkles size={14} /></span>
             <span className="metric-pill-value">{me.bonus_days_balance}</span>
-            <span className="metric-pill-label">Р±РѕРЅСѓСЃС‹</span>
+            <span className="metric-pill-label">бонусы</span>
           </button>
         </div>
-        <p className="hero-label greeting-chip">Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ</p>
+        <p className="hero-label greeting-chip">Добро пожаловать</p>
         <p className="hero-title welcome-line-1">{quickIntent.title}</p>
         <p className="hero-subtitle welcome-line-2">{quickIntent.text}</p>
         <div className="action-row compact-actions">
           {trialStatus?.eligible && (
             <button className="btn btn-primary" onClick={() => void activateTrial()} disabled={activatingTrial}>
-              <Rocket size={16} /> {activatingTrial ? 'РђРєС‚РёРІРёСЂСѓРµРј...' : `РџСЂРѕР±РЅС‹Р№ РїРµСЂРёРѕРґ РЅР° ${trialStatus.days} РґРЅ.`}
+              <Rocket size={16} /> {activatingTrial ? 'Активируем...' : `Пробный период на ${trialStatus.days} дн.`}
             </button>
           )}
           <Link className="btn btn-primary" to={quickIntent.to}>
             <QuickIcon size={16} /> {quickIntent.label}
           </Link>
           <Link className="btn btn-ghost" to="/buy">
-            <Wallet size={16} /> РљСѓРїРёС‚СЊ РёР»Рё РїСЂРѕРґР»РёС‚СЊ
+            <Wallet size={16} /> Купить или продлить
           </Link>
         </div>
         {trialReasonText && <p className="muted">{trialReasonText}</p>}
@@ -221,11 +238,11 @@ export function HomePage() {
 
       <article className="glass-card quick-summary liquid-panel compact-summary-card">
         <div>
-          <p className="muted">Р‘Р»РёР¶Р°Р№С€РµРµ РѕРєРѕРЅС‡Р°РЅРёРµ</p>
+          <p className="muted">Ближайшее окончание</p>
           <p className="title-line">{nearestExpiry}</p>
         </div>
         <div>
-          <p className="muted">РџСЂРёРіР»Р°С€РµРЅРѕ РґСЂСѓР·РµР№</p>
+          <p className="muted">Приглашено друзей</p>
           <p className="title-line">{referral?.invited_count ?? me.invited_count}</p>
         </div>
       </article>
@@ -233,22 +250,22 @@ export function HomePage() {
       <article className="glass-card account-section liquid-panel">
         <div className="section-head">
           <div>
-            <p className="title-line row-inline"><Gift size={16} /> РџСЂРёРіР»Р°С€РµРЅРёСЏ</p>
-            <p className="muted">Р”РµР»РёС‚РµСЃСЊ ZERO Рё РїРѕР»СѓС‡Р°Р№С‚Рµ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ РґРЅРё РґРѕСЃС‚СѓРїР°.</p>
+            <p className="title-line row-inline"><Gift size={16} /> Приглашения</p>
+            <p className="muted">Делитесь ZERO и получайте дополнительные дни доступа.</p>
           </div>
-          <span className="chip">{referral?.bonus_days_balance ?? me.bonus_days_balance} РґРЅ.</span>
+          <span className="chip">{referral?.bonus_days_balance ?? me.bonus_days_balance} дн.</span>
         </div>
         <div className="referral-panel">
           <div>
-            <p className="muted">Р’Р°С€ РєРѕРґ</p>
+            <p className="muted">Ваш код</p>
             <p className="title-line">{referral?.referral_code ?? me.referral_code}</p>
           </div>
           <div>
-            <p className="muted">РЎСЃС‹Р»РєР°</p>
-            <p className="mono-block">{referral?.referral_link || 'РЎСЃС‹Р»РєР° РїРѕСЏРІРёС‚СЃСЏ РЅРµРјРЅРѕРіРѕ РїРѕР·Р¶Рµ.'}</p>
+            <p className="muted">Ссылка</p>
+            <p className="mono-block">{referral?.referral_link || 'Ссылка появится немного позже.'}</p>
           </div>
           <button className="btn btn-ghost" onClick={() => void copyReferral()} disabled={!referral?.referral_link}>
-            <Copy size={16} /> РЎРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ
+            <Copy size={16} /> Скопировать ссылку
           </button>
         </div>
       </article>
@@ -256,26 +273,26 @@ export function HomePage() {
       <article className="glass-card account-section liquid-panel">
         <div className="section-head">
           <div>
-            <p className="title-line row-inline"><ShieldCheck size={16} /> Р‘С‹СЃС‚СЂС‹Рµ С€Р°РіРё</p>
-            <p className="muted">ZERO РїРѕРґСЃРєР°Р·С‹РІР°РµС‚, С‡С‚Рѕ Р»РѕРіРёС‡РЅРµРµ СЃРґРµР»Р°С‚СЊ РґР°Р»СЊС€Рµ.</p>
+            <p className="title-line row-inline"><ShieldCheck size={16} /> Быстрые шаги</p>
+            <p className="muted">ZERO подсказывает, что логичнее сделать дальше.</p>
           </div>
         </div>
         <div className="stack compact-stack">
           <div className="hint-row">
             <Zap size={16} />
-            <span>{me.active_keys_count > 0 ? 'РћС‚РєСЂРѕР№С‚Рµ РґРѕСЃС‚СѓРїС‹, РµСЃР»Рё С…РѕС‚РёС‚Рµ Р±С‹СЃС‚СЂРѕ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РёР»Рё РїСЂРѕРґР»РёС‚СЊ РґРѕСЃС‚СѓРї.' : 'РџРµСЂРµР№РґРёС‚Рµ РІ СЂР°Р·РґРµР» РїРѕРєСѓРїРєРё, С‡С‚РѕР±С‹ РІС‹Р±СЂР°С‚СЊ С‚Р°СЂРёС„ Рё СЃРѕР·РґР°С‚СЊ РїРµСЂРІСѓСЋ Р·Р°СЏРІРєСѓ.'}</span>
+            <span>{me.active_keys_count > 0 ? 'Откройте доступы, если хотите быстро скопировать ссылку подключения или продлить доступ.' : 'Перейдите в раздел покупки, чтобы выбрать тариф и создать первую заявку.'}</span>
           </div>
           <div className="hint-row">
             <Newspaper size={16} />
-            <span>{latestNews.length ? 'Р’Рѕ РІРєР»Р°РґРєРµ В«РќРѕРІРѕСЃС‚РёВ» СѓР¶Рµ РµСЃС‚СЊ СЃРІРµР¶РёРµ РѕР±РЅРѕРІР»РµРЅРёСЏ РїРѕ СЃРµСЂРІРёСЃСѓ.' : 'Р’Рѕ РІРєР»Р°РґРєРµ В«РќРѕРІРѕСЃС‚РёВ» Р±СѓРґСѓС‚ РїРѕСЏРІР»СЏС‚СЊСЃСЏ СЃРІРµР¶РёРµ РѕР±РЅРѕРІР»РµРЅРёСЏ Рё Р°РЅРѕРЅСЃС‹.'}</span>
+            <span>{latestNews.length ? 'Во вкладке «Новости» уже есть свежие обновления по сервису.' : 'Во вкладке «Новости» будут появляться свежие обновления и анонсы.'}</span>
           </div>
         </div>
       </article>
 
       {systemStatus?.maintenance_mode && (
         <article className="glass-card liquid-panel">
-          <p className="title-line">РЎРµСЂРІРёСЃ РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РµРЅ</p>
-          <p className="muted">Р’Рѕ РІСЂРµРјСЏ С‚РµС…РЅРёС‡РµСЃРєРёС… СЂР°Р±РѕС‚ Р°РєС‚РёРІР°С†РёСЏ Рё СѓРїСЂР°РІР»РµРЅРёРµ РґРѕСЃС‚СѓРїРѕРј РјРѕРіСѓС‚ Р±С‹С‚СЊ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРЅС‹.</p>
+          <p className="title-line">Сервис временно ограничен</p>
+          <p className="muted">Во время технических работ активация и управление доступом могут быть временно недоступны.</p>
         </article>
       )}
 
@@ -284,15 +301,15 @@ export function HomePage() {
           <div className="modal-card liquid-modal metric-modal" onClick={(event) => event.stopPropagation()}>
             <div className="row-between">
               <div>
-                <p className="title-line">{metricInfo === 'keys' ? 'РђРєС‚РёРІРЅС‹Рµ РґРѕСЃС‚СѓРїС‹' : 'Р‘РѕРЅСѓСЃРЅС‹Рµ РґРЅРё'}</p>
-                <p className="muted">{metricInfo === 'keys' ? 'РљРѕСЂРѕС‚РєРѕРµ РѕР±СЉСЏСЃРЅРµРЅРёРµ С‚РµРєСѓС‰РµРіРѕ СЃС‚Р°С‚СѓСЃР° РґРѕСЃС‚СѓРїР°.' : 'РљРѕСЂРѕС‚РєРѕРµ РѕР±СЉСЏСЃРЅРµРЅРёРµ Р±РѕРЅСѓСЃРЅРѕРіРѕ Р±Р°Р»Р°РЅСЃР°.'}</p>
+                <p className="title-line">{metricInfo === 'keys' ? 'Активные доступы' : 'Бонусные дни'}</p>
+                <p className="muted">{metricInfo === 'keys' ? 'Короткое объяснение текущего статуса доступа.' : 'Короткое объяснение бонусного баланса.'}</p>
               </div>
               <button className="icon-button" onClick={() => setMetricInfo(null)}><X size={16} /></button>
             </div>
             <p className="muted">
               {metricInfo === 'keys'
-                ? 'Р­С‚Рѕ РєРѕР»РёС‡РµСЃС‚РІРѕ Р°РєС‚РёРІРЅС‹С… РїРѕРґРєР»СЋС‡РµРЅРёР№ ZERO, РєРѕС‚РѕСЂС‹РјРё РјРѕР¶РЅРѕ РїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РїСЂСЏРјРѕ СЃРµР№С‡Р°СЃ. РќР°Р¶РјРёС‚Рµ РЅР° РєРЅРѕРїРєСѓ РѕС‚РєСЂС‹С‚РёСЏ РґРѕСЃС‚СѓРїР°, С‡С‚РѕР±С‹ РїРѕСЃРјРѕС‚СЂРµС‚СЊ РґРµС‚Р°Р»Рё Рё СЃСЃС‹Р»РєСѓ РїРѕРґРєР»СЋС‡РµРЅРёСЏ.'
-                : 'Р­С‚Рѕ Р·Р°РїР°СЃ Р±РµСЃРїР»Р°С‚РЅС‹С… РґРЅРµР№, РєРѕС‚РѕСЂС‹Р№ РјРѕР¶РЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РїСЂРё СЃР»РµРґСѓСЋС‰РµРј РїСЂРѕРґР»РµРЅРёРё. Р‘РѕРЅСѓСЃС‹ РЅР°С‡РёСЃР»СЏСЋС‚СЃСЏ Р·Р° РїСЂРёРіР»Р°С€РµРЅРёСЏ Рё СЃРїРµС†РёР°Р»СЊРЅС‹Рµ Р°РєС†РёРё.'}
+                ? 'Это количество активных подключений ZERO, которыми можно пользоваться прямо сейчас. Нажмите на кнопку открытия доступа, чтобы посмотреть детали и ссылку подключения.'
+                : 'Это запас бесплатных дней, который можно использовать при следующем продлении. Бонусы начисляются за приглашения и специальные акции.'}
             </p>
           </div>
         </div>
@@ -303,20 +320,25 @@ export function HomePage() {
           <div className="modal-card liquid-modal" onClick={(event) => event.stopPropagation()}>
             <div className="row-between">
               <div>
-                <p className="title-line">РџРѕРјРѕС‰СЊ ZERO</p>
-                <p className="muted">Р§Р°СЃС‚С‹Рµ РІРѕРїСЂРѕСЃС‹ Рё РєРѕРЅС‚Р°РєС‚ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°</p>
+                <p className="title-line">Помощь ZERO</p>
+                <p className="muted">Частые вопросы и контакт администратора</p>
               </div>
               <button className="icon-button" onClick={() => setHelpOpen(false)}><X size={16} /></button>
             </div>
 
             <article className="support-card liquid-panel">
-              <p className="title-line">РЎРІСЏР·СЊ СЃ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј</p>
-              <p className="muted">{support?.display_tag ?? 'РљРѕРЅС‚Р°РєС‚ СЃРєРѕСЂРѕ РїРѕСЏРІРёС‚СЃСЏ'}</p>
-              {support?.telegram_link ? (
-                <a className="btn btn-primary" href={support.telegram_link} target="_blank" rel="noreferrer">РќР°РїРёСЃР°С‚СЊ РІ Telegram</a>
-              ) : (
-                <p className="muted">Р•СЃР»Рё РєРѕРЅС‚Р°РєС‚ РїРѕРєР° РЅРµ РїРѕРєР°Р·Р°РЅ, РїРѕРїСЂРѕР±СѓР№С‚Рµ РѕС‚РєСЂС‹С‚СЊ РѕРєРЅРѕ РїРѕР·Р¶Рµ.</p>
-              )}
+              <p className="title-line">Связь с администратором</p>
+              <p className="muted">{support?.display_tag ?? 'Контакт скоро появится'}</p>
+              <div className="action-row compact-actions">
+                <button className="btn btn-ghost" onClick={() => openTelegramPage(infoUrl)}>
+                  <FileText size={16} /> Читать информацию
+                </button>
+                {support?.telegram_link ? (
+                  <a className="btn btn-primary" href={support.telegram_link} target="_blank" rel="noreferrer">Написать в Telegram</a>
+                ) : (
+                  <p className="muted">Если контакт пока не показан, попробуйте открыть окно позже.</p>
+                )}
+              </div>
             </article>
 
             <div className="stack compact-stack">
@@ -335,16 +357,16 @@ export function HomePage() {
         <div className="modal-backdrop">
           <div className="modal-card onboarding-card liquid-modal">
             <div className="row-between">
-              <span className="chip">РЁР°Рі {onboardingStep + 1} РёР· {onboardingSteps.length}</span>
-              <button className="btn btn-ghost" onClick={dismissOnboarding}>РџСЂРѕРїСѓСЃС‚РёС‚СЊ</button>
+              <span className="chip">Шаг {onboardingStep + 1} из {onboardingSteps.length}</span>
+              <button className="btn btn-ghost" onClick={dismissOnboarding}>Пропустить</button>
             </div>
             <p className="title-line">{onboardingSteps[onboardingStep].title}</p>
             <p className="muted">{onboardingSteps[onboardingStep].text}</p>
             <div className="action-row">
               {onboardingStep < onboardingSteps.length - 1 ? (
-                <button className="btn btn-primary" onClick={() => setOnboardingStep((prev) => prev + 1)}>Р”Р°Р»СЊС€Рµ</button>
+                <button className="btn btn-primary" onClick={() => setOnboardingStep((prev) => prev + 1)}>Дальше</button>
               ) : (
-                <button className="btn btn-primary" onClick={dismissOnboarding}>РџРѕРЅСЏС‚РЅРѕ</button>
+                <button className="btn btn-primary" onClick={dismissOnboarding}>Понятно</button>
               )}
             </div>
           </div>

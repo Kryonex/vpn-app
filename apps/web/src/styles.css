@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: dark;
   --page-gutter: clamp(12px, 4vw, 18px);
   --bg: #050505;
@@ -178,6 +178,12 @@ label {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
+}
+
+.page-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .page-header > * {
@@ -963,6 +969,10 @@ details[open] .foldable-arrow {
   .admin-user-header,
   .foldable-summary {
     grid-template-columns: 1fr;
+  }
+
+  .page-header-actions {
+    justify-self: start;
   }
 
   .modal-card {

@@ -37,6 +37,7 @@ def mini_app_keyboard() -> InlineKeyboardMarkup | None:
         return None
 
     info_url = urljoin(settings.mini_app_url.rstrip('/') + '/', 'info.html')
+    ticket_url = urljoin(settings.mini_app_url.rstrip('/') + '/', 'contact.html')
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -50,7 +51,11 @@ def mini_app_keyboard() -> InlineKeyboardMarkup | None:
                 InlineKeyboardButton(
                     text='Информация',
                     url=info_url,
-                )
+                ),
+                InlineKeyboardButton(
+                    text='Создать тикет',
+                    url=ticket_url,
+                ),
             ],
         ]
     )
@@ -76,7 +81,8 @@ async def start_handler(message: Message) -> None:
     text = (
         f'Здравствуйте, {first_name}.\n\n'
         'ZERO уже готов к работе.\n'
-        'В мини-приложении можно подключить ускорение, продлить доступ, открыть свои конфигурации и проверить заявки.\n\n'
+        'В мини-приложении можно подключить ускорение, продлить доступ, открыть свои конфигурации и проверить заявки.\n'
+        'Если нужен ответ от поддержки, воспользуйтесь кнопкой создания тикета.\n\n'
         'Нажмите кнопку ниже, чтобы перейти в ZERO.'
     )
     await message.answer(text, reply_markup=mini_app_keyboard())

@@ -149,3 +149,25 @@ export function openTelegramProxy(rawUrl: string): void {
     window.location.href = normalizedUrl;
   }
 }
+
+export function openTelegramPage(rawUrl: string): void {
+  const normalizedUrl = rawUrl.trim();
+  const webApp = window.Telegram?.WebApp;
+
+  console.info('[telegram] open page', {
+    hasWebApp: Boolean(webApp),
+    hasOpenLink: Boolean(webApp?.openLink),
+    url: normalizedUrl,
+  });
+
+  if (!normalizedUrl) {
+    return;
+  }
+
+  if (webApp?.openLink) {
+    webApp.openLink(normalizedUrl);
+    return;
+  }
+
+  window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
+}
