@@ -377,8 +377,21 @@ async def admin_update_telegram_proxy_settings(
         **await service.set_telegram_proxy_settings(
             proxy_url=payload.proxy_url,
             button_text=payload.button_text,
+            proxies=[item.model_dump() for item in payload.proxies],
         )
     )
+
+
+@router.delete('/system/news/{news_id}')
+async def admin_delete_news(
+    news_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    deleted = await SystemStatusService(session).delete_news(news_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='News not found')
+    await session.commit()
+    return {'ok': True, 'news_id': news_id}
 
 
 @router.get('/system/inbounds', response_model=list[AdminInboundOut])

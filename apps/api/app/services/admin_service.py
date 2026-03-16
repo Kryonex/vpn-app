@@ -206,31 +206,48 @@ class AdminService:
         return value
 
     async def get_telegram_proxy_settings(self) -> dict[str, object]:
-        proxy_url_setting = await self.app_settings_repo.get('telegram_proxy_url')
-        button_text_setting = await self.app_settings_repo.get('telegram_proxy_button_text')
-        proxy_url = proxy_url_setting.value.strip() if proxy_url_setting and proxy_url_setting.value.strip() else None
-        button_text = (
-            button_text_setting.value.strip()
-            if button_text_setting and button_text_setting.value.strip()
-            else 'Подключить прокси'
-        )
+        proxies = await self._get_system_service().get_telegram_proxies()
+        primary = next((item for item in proxies if item.get('proxy_url')), None)
         return {
-            'proxy_url': proxy_url,
-            'button_text': button_text,
-            'enabled': bool(proxy_url),
+            'proxy_url': primary.get('proxy_url') if primary else None,
+            'button_text': str(primary.get('button_text') or 'Подключить прокси') if primary else 'Подключить прокси',
+            'enabled': bool(primary),
+            'proxies': proxies,
         }
 
-    async def set_telegram_proxy_settings(self, *, proxy_url: str | None, button_text: str | None) -> dict[str, object]:
+    async def set_telegram_proxy_settings(
+        self,
+        *,
+        proxy_url: str | None,
+        button_text: str | None,
+        proxies: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
         normalized_proxy_url = (proxy_url or '').strip()
         normalized_button_text = (button_text or '').strip() or 'Подключить прокси'
-        await self.app_settings_repo.set('telegram_proxy_url', normalized_proxy_url)
-        await self.app_settings_repo.set('telegram_proxy_button_text', normalized_button_text)
+        normalized_proxies = proxies or []
+        if not normalized_proxies and normalized_proxy_url:
+            normalized_proxies = [
+                {
+                    'id': 'primary',
+                    'country': 'Основной',
+                    'proxy_url': normalized_proxy_url,
+                    'button_text': normalized_button_text,
+                }
+            ]
+        saved_proxies = await self._get_system_service().save_telegram_proxies(normalized_proxies)
         await self.session.commit()
+        primary = next((item for item in saved_proxies if item.get('proxy_url')), None)
         return {
-            'proxy_url': normalized_proxy_url or None,
-            'button_text': normalized_button_text,
-            'enabled': bool(normalized_proxy_url),
+            'proxy_url': primary.get('proxy_url') if primary else None,
+            'button_text': str(primary.get('button_text') or 'Подключить прокси') if primary else 'Подключить прокси',
+            'enabled': bool(primary),
+            'proxies': saved_proxies,
         }
+
+    def _get_system_service(self):
+        from app.services.system_service import SystemStatusService
+
+        return SystemStatusService(self.session)
 
     async def list_available_inbounds(self) -> list[dict[str, object]]:
         return await self.access_policy.get_available_inbounds(self.threexui_service)

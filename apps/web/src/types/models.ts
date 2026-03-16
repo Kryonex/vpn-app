@@ -107,10 +107,19 @@ export type SupportContact = {
   telegram_link: string | null;
 };
 
+export type TelegramProxyItem = {
+  id: string;
+  country: string;
+  proxy_url: string | null;
+  button_text: string;
+  enabled: boolean;
+};
+
 export type TelegramProxyAccess = {
   enabled: boolean;
   proxy_url: string | null;
   button_text: string;
+  proxies: TelegramProxyItem[];
 };
 
 export type FreeTrialStatus = {

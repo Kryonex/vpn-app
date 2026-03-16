@@ -1,4 +1,4 @@
-﻿import { Copy, ExternalLink, QrCode, RefreshCw, Trash2 } from 'lucide-react';
+﻿import { Copy, ExternalLink, KeyRound, QrCode, RefreshCw, Trash2, X } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -29,6 +29,7 @@ export function KeyDetailsPage() {
   const [rotating, setRotating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [proxyAccess, setProxyAccess] = useState<TelegramProxyAccess | null>(null);
+  const [proxyChooserOpen, setProxyChooserOpen] = useState(false);
 
   useEffect(() => {
     if (!keyId) return;
@@ -76,6 +77,16 @@ export function KeyDetailsPage() {
     }
   };
 
+  const openProxy = () => {
+    const proxies = proxyAccess?.proxies?.filter((item) => item.enabled && item.proxy_url) ?? [];
+    if (!proxies.length) return;
+    if (proxies.length === 1) {
+      openTelegramProxy(proxies[0].proxy_url!);
+      return;
+    }
+    setProxyChooserOpen(true);
+  };
+
   if (loading) return <LoadingState text="Загружаем данные доступа..." />;
   if (error && !keyData) return <ErrorState text={error} />;
   if (!keyData) return <EmptyState title="Доступ не найден" text="Возможно, он уже удалён или ещё не успел загрузиться." />;
@@ -119,11 +130,8 @@ export function KeyDetailsPage() {
                 <Copy size={16} /> Скопировать
               </button>
               {proxyAccess?.enabled && keyData.status === 'active' && (
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => proxyAccess.proxy_url && openTelegramProxy(proxyAccess.proxy_url)}
-                >
-                  <ExternalLink size={16} /> {proxyAccess.button_text}
+                <button className="btn btn-ghost" onClick={openProxy}>
+                  <KeyRound size={16} /> {proxyAccess.button_text}
                 </button>
               )}
               <button className="btn btn-ghost" onClick={rotate} disabled={rotating || Boolean(systemStatus?.maintenance_mode)}>
@@ -164,6 +172,34 @@ export function KeyDetailsPage() {
               : 'Конфигурация ещё подготавливается. Обновите страницу немного позже.'
           }
         />
+      )}
+
+      {proxyChooserOpen && proxyAccess && (
+        <div className="modal-backdrop" onClick={() => setProxyChooserOpen(false)}>
+          <div className="modal-card liquid-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="row-between">
+              <div>
+                <p className="title-line">Выберите прокси</p>
+                <p className="muted">Выберите страну, через которую хотите подключиться.</p>
+              </div>
+              <button className="icon-button" onClick={() => setProxyChooserOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="stack compact-stack">
+              {proxyAccess.proxies.filter((item) => item.enabled && item.proxy_url).map((item) => (
+                <button
+                  key={item.id}
+                  className="btn btn-ghost proxy-choice-button"
+                  onClick={() => {
+                    openTelegramProxy(item.proxy_url!);
+                    setProxyChooserOpen(false);
+                  }}
+                >
+                  <KeyRound size={16} /> {item.country}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {deletionAllowed && (

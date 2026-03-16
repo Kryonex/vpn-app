@@ -9,7 +9,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, SkeletonCards } from '../components/StateCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import type { Payment, PaymentSettings, Plan, SystemStatus, VPNKey } from '../types/models';
+import type { NewsItem, Payment, PaymentSettings, Plan, SystemStatus, TelegramProxyItem, VPNKey } from '../types/models';
 
 type AdminStats = { total_payments: number; succeeded_payments: number; pending_payments: number; failed_payments: number; total_revenue: string; month_revenue: string };
 type AdminUser = {
@@ -32,7 +32,7 @@ type UserLookup = { id: string; telegram_username: string | null };
 type MessageResult = { ok: boolean; target_count: number; duplicate_blocked: boolean; audit_log_id: string | null };
 type NotificationQueueStatus = { queue_key: string; pending_count: number };
 type PaymentSettingsState = PaymentSettings;
-type TelegramProxySettings = { proxy_url: string | null; button_text: string; enabled: boolean };
+type TelegramProxySettings = { proxy_url: string | null; button_text: string; enabled: boolean; proxies: TelegramProxyItem[] };
 type AdminInbound = { id: number; remark: string | null; protocol: string | null; port: number | null };
 type PurchaseInboundSettings = { inbound_ids: number[] };
 type FreeTrialSettings = { enabled: boolean; days: number; inbound_ids: number[] };
@@ -102,7 +102,8 @@ export function AdminPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettingsState>({ enabled: true, mode: 'direct' });
-  const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Подключить прокси', enabled: false });
+  const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Подключить прокси', enabled: false, proxies: [] });
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [availableInbounds, setAvailableInbounds] = useState<AdminInbound[]>([]);
   const [purchaseInboundIds, setPurchaseInboundIds] = useState<number[]>([]);
   const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings>({ enabled: false, days: 3, inbound_ids: [] });
@@ -156,6 +157,7 @@ export function AdminPage() {
       { name: 'notification_queue', run: () => apiRequest<NotificationQueueStatus>('/admin/system/notification-queue') },
       { name: 'payment_settings', run: () => apiRequest<PaymentSettingsState>('/admin/system/payments') },
       { name: 'telegram_proxy', run: () => apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy') },
+      { name: 'system_news', run: () => apiRequest<{ items: NewsItem[] }>('/system/news') },
       { name: 'inbounds', run: () => apiRequest<AdminInbound[]>('/admin/system/inbounds') },
       { name: 'purchase_inbounds', run: () => apiRequest<PurchaseInboundSettings>('/admin/system/purchase-inbounds') },
       { name: 'free_trial', run: () => apiRequest<FreeTrialSettings>('/admin/system/free-trial') },
@@ -232,6 +234,9 @@ export function AdminPage() {
           case 'telegram_proxy':
             setTelegramProxy(result.value as TelegramProxySettings);
             break;
+          case 'system_news':
+            setNewsItems((result.value as { items: NewsItem[] }).items);
+            break;
           case 'inbounds':
             setAvailableInbounds(result.value as AdminInbound[]);
             break;
@@ -293,6 +298,23 @@ export function AdminPage() {
   const getSelectedInboundIds = (event: ChangeEvent<HTMLSelectElement>) =>
     Array.from(event.target.selectedOptions).map((option) => Number(option.value)).filter((value) => Number.isFinite(value));
   const inboundLabel = (inbound: AdminInbound) => [inbound.remark || `Inbound ${inbound.id}`, inbound.protocol, inbound.port ? `:${inbound.port}` : null].filter(Boolean).join(' ');
+
+  const addProxyDraft = () => setTelegramProxy((prev) => ({
+    ...prev,
+    proxies: [...prev.proxies, { id: crypto.randomUUID(), country: '', proxy_url: null, button_text: prev.button_text || 'Подключить прокси', enabled: false }],
+  }));
+
+  const updateProxyDraft = (id: string, field: keyof TelegramProxyItem, value: string) => setTelegramProxy((prev) => ({
+    ...prev,
+    proxies: prev.proxies.map((item) => item.id === id
+      ? { ...item, [field]: value, enabled: field === 'proxy_url' ? Boolean(value.trim()) : item.enabled }
+      : item),
+  }));
+
+  const removeProxyDraft = (id: string) => setTelegramProxy((prev) => ({
+    ...prev,
+    proxies: prev.proxies.filter((item) => item.id !== id),
+  }));
 
   const lookupUser = async () => {
     try {
@@ -534,115 +556,101 @@ export function AdminPage() {
           </div>
         </FoldableSection>
 
-        <FoldableSection title="Telegram-прокси" subtitle="Скрытая ссылка для подключения после оплаты" icon={<Link2 size={16} />} defaultOpen={false}>
+        <FoldableSection title="Управление новостями" subtitle="Удаление опубликованных новостей из раздела пользователей" icon={<BellRing size={16} />} defaultOpen={false}>
+          {!newsItems.length ? (
+            <p className="muted">Опубликованных новостей пока нет.</p>
+          ) : (
+            <div className="admin-list">
+              {newsItems.map((item) => (
+                <article key={item.id} className="admin-item">
+                  <div className="row-between">
+                    <div>
+                      <p className="title-line">{item.title}</p>
+                      <p className="muted">{new Date(item.created_at).toLocaleString()}</p>
+                    </div>
+                    <button className="btn btn-danger-soft" onClick={() => void run(async () => {
+                      await apiRequest(`/admin/system/news/${item.id}`, { method: "DELETE" });
+                      await afterAction("Новость удалена.");
+                    })}>
+                      <Trash2 size={16} /> Удалить
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </FoldableSection>
+
+        <FoldableSection title="Telegram-прокси" subtitle="Несколько прокси с выбором страны для пользователя" icon={<Link2 size={16} />} defaultOpen={false}>
           <div className="admin-note">
-            Ссылка хранится на сервере в настройках приложения и не зашивается в код репозитория.
+            Ссылки хранятся на сервере в настройках приложения и не зашиваются в код репозитория.
           </div>
-          <label className="field">
-            <span className="field-label">Ссылка прокси</span>
-            <input
-              className="input"
-              type="password"
-              value={telegramProxy.proxy_url ?? ''}
-              onChange={(e) => setTelegramProxy((prev) => ({ ...prev, proxy_url: e.target.value }))}
-              placeholder="tg://proxy?server=..."
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Текст кнопки</span>
-            <input
-              className="input"
-              value={telegramProxy.button_text}
-              onChange={(e) => setTelegramProxy((prev) => ({ ...prev, button_text: e.target.value }))}
-              placeholder="Подключить прокси"
-            />
-          </label>
-          <div className="toggle-list">
-            <label className="toggle-row">
-              <input type="checkbox" checked={Boolean(telegramProxy.proxy_url?.trim())} readOnly />
-              <span>{telegramProxy.proxy_url?.trim() ? 'Прокси включён' : 'Прокси выключен'}</span>
-            </label>
+          <div className="admin-list">
+            {telegramProxy.proxies.map((proxy, index) => (
+              <article key={proxy.id} className="admin-item">
+                <div className="row-between">
+                  <div>
+                    <p className="title-line">Прокси {index + 1}</p>
+                    <p className="muted">Пользователь увидит эту страну при выборе подключения.</p>
+                  </div>
+                  <button className="btn btn-danger-soft" onClick={() => removeProxyDraft(proxy.id)}>
+                    <Trash2 size={16} /> Удалить
+                  </button>
+                </div>
+                <div className="input-grid">
+                  <label className="field">
+                    <span className="field-label">Страна</span>
+                    <input className="input" value={proxy.country} onChange={(e) => updateProxyDraft(proxy.id, "country", e.target.value)} placeholder="Например: Германия" />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Текст кнопки</span>
+                    <input className="input" value={proxy.button_text} onChange={(e) => updateProxyDraft(proxy.id, "button_text", e.target.value)} placeholder="Подключить прокси" />
+                  </label>
+                </div>
+                <label className="field">
+                  <span className="field-label">Ссылка прокси</span>
+                  <input className="input" type="password" value={proxy.proxy_url ?? ""} onChange={(e) => updateProxyDraft(proxy.id, "proxy_url", e.target.value)} placeholder="tg://proxy?server=..." />
+                </label>
+              </article>
+            ))}
           </div>
           <div className="input-grid">
+            <button className="btn btn-ghost" onClick={addProxyDraft}>
+              <Link2 size={16} /> Добавить прокси
+            </button>
             <button className="btn btn-primary" onClick={() => void run(async () => {
-              await apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy', {
-                method: 'PATCH',
+              const prepared = telegramProxy.proxies
+                .map((item) => ({
+                  ...item,
+                  country: item.country.trim(),
+                  proxy_url: item.proxy_url?.trim() || null,
+                  button_text: item.button_text.trim() || "Подключить прокси",
+                }))
+                .filter((item) => item.country && item.proxy_url);
+              const updated = await apiRequest<TelegramProxySettings>("/admin/system/telegram-proxy", {
+                method: "PATCH",
                 body: JSON.stringify({
-                  proxy_url: telegramProxy.proxy_url || null,
-                  button_text: telegramProxy.button_text || 'Подключить прокси',
+                  proxy_url: prepared[0]?.proxy_url ?? null,
+                  button_text: prepared[0]?.button_text ?? "Подключить прокси",
+                  proxies: prepared,
                 }),
               });
-              await afterAction('Настройки Telegram-прокси сохранены.');
+              setTelegramProxy(updated);
+              await afterAction("Настройки Telegram-прокси сохранены.");
             })}>
               <Link2 size={16} /> Сохранить прокси
             </button>
-            <button className="btn btn-ghost" onClick={() => void run(async () => {
-              const updated = await apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy', {
-                method: 'PATCH',
-                body: JSON.stringify({ proxy_url: null, button_text: 'Подключить прокси' }),
+            <button className="btn btn-danger-soft" onClick={() => void run(async () => {
+              const updated = await apiRequest<TelegramProxySettings>("/admin/system/telegram-proxy", {
+                method: "PATCH",
+                body: JSON.stringify({ proxy_url: null, button_text: "Подключить прокси", proxies: [] }),
               });
               setTelegramProxy(updated);
-              await afterAction('Telegram-прокси отключён.');
+              await afterAction("Telegram-прокси отключены.");
             })}>
-              <Trash2 size={16} /> Отключить
+              <Trash2 size={16} /> Отключить все
             </button>
-            </div>
-          </FoldableSection>
-
-        <FoldableSection title="Бесплатный доступ и inbound'ы" subtitle="Глобальные inbound'ы для оплат и отдельные настройки пробного доступа" icon={<Wrench size={16} />} defaultOpen={false}>
-          <label className="field">
-            <span className="field-label">Inbound'ы для платных подписок</span>
-            <select className="input" multiple value={purchaseInboundIds.map(String)} onChange={(e) => setPurchaseInboundIds(getSelectedInboundIds(e))}>
-              {availableInbounds.map((inbound) => (
-                <option key={inbound.id} value={inbound.id}>{inboundLabel(inbound)}</option>
-              ))}
-            </select>
-          </label>
-          <button className="btn btn-primary" onClick={() => void run(async () => {
-            await apiRequest('/admin/system/purchase-inbounds', {
-              method: 'PATCH',
-              body: JSON.stringify({ inbound_ids: purchaseInboundIds }),
-            });
-            await afterAction('Глобальные inbound’ы сохранены. Активные платные клиенты автоматически досинхронизированы в новые inbound’ы.');
-          })}>
-            <Wrench size={16} /> Сохранить inbound'ы
-          </button>
-          <button className="btn btn-ghost" onClick={() => void run(async () => {
-            const result = await apiRequest<{ synced_keys: number; inbound_ids: number[] }>('/admin/system/purchase-inbounds/resync', {
-              method: 'POST',
-            });
-            await afterAction(`Пересинхронизация завершена. Досинхронизировано клиентов: ${result.synced_keys}.`);
-          })}>
-            <Wrench size={16} /> Пересинхронизировать клиентов
-          </button>
-          <div className="divider" />
-          <div className="toggle-list">
-            <label className="toggle-row">
-              <input type="checkbox" checked={freeTrialSettings.enabled} onChange={(e) => setFreeTrialSettings((prev) => ({ ...prev, enabled: e.target.checked }))} />
-              <span>Включить бесплатный доступ для новых пользователей</span>
-            </label>
           </div>
-          <label className="field">
-            <span className="field-label">Бесплатных дней</span>
-            <input className="input" type="number" value={freeTrialSettings.days} onChange={(e) => setFreeTrialSettings((prev) => ({ ...prev, days: Number(e.target.value || 1) }))} />
-          </label>
-          <label className="field">
-            <span className="field-label">Inbound'ы для бесплатного доступа</span>
-            <select className="input" multiple value={freeTrialSettings.inbound_ids.map(String)} onChange={(e) => setFreeTrialSettings((prev) => ({ ...prev, inbound_ids: getSelectedInboundIds(e) }))}>
-              {availableInbounds.map((inbound) => (
-                <option key={inbound.id} value={inbound.id}>{inboundLabel(inbound)}</option>
-              ))}
-            </select>
-          </label>
-          <button className="btn btn-primary" onClick={() => void run(async () => {
-            await apiRequest('/admin/system/free-trial', {
-              method: 'PATCH',
-              body: JSON.stringify(freeTrialSettings),
-            });
-            await afterAction('Настройки бесплатного доступа сохранены.');
-          })}>
-            <Gift size={16} /> Сохранить бесплатный доступ
-          </button>
         </FoldableSection>
 
         <FoldableSection title="Рефералы и бонусы" subtitle="Награда за приглашения и ручные начисления" icon={<Gift size={16} />} defaultOpen={false}>

@@ -220,6 +220,11 @@ label {
   width: 100%;
 }
 
+.proxy-choice-button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .nav-dock {
   height: calc(98px + env(safe-area-inset-bottom));
   flex: 0 0 auto;

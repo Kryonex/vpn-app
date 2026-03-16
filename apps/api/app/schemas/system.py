@@ -77,21 +77,39 @@ class PaymentSettingsUpdateRequest(BaseModel):
     enabled: bool = True
 
 
-class TelegramProxySettingsOut(BaseModel):
+class TelegramProxyItemOut(BaseModel):
+    id: str
+    country: str
     proxy_url: str | None = None
     button_text: str = 'Подключить прокси'
     enabled: bool = False
 
 
+class TelegramProxyItemUpdateRequest(BaseModel):
+    id: str | None = None
+    country: str = Field(min_length=1, max_length=64)
+    proxy_url: str | None = Field(default=None, max_length=2048)
+    button_text: str = Field(default='Подключить прокси', max_length=64)
+
+
+class TelegramProxySettingsOut(BaseModel):
+    proxy_url: str | None = None
+    button_text: str = 'Подключить прокси'
+    enabled: bool = False
+    proxies: list[TelegramProxyItemOut] = Field(default_factory=list)
+
+
 class TelegramProxySettingsUpdateRequest(BaseModel):
     proxy_url: str | None = Field(default=None, max_length=2048)
     button_text: str = Field(default='Подключить прокси', max_length=64)
+    proxies: list[TelegramProxyItemUpdateRequest] = Field(default_factory=list)
 
 
 class UserTelegramProxyOut(BaseModel):
     enabled: bool = False
     proxy_url: str | None = None
     button_text: str = 'Подключить прокси'
+    proxies: list[TelegramProxyItemOut] = Field(default_factory=list)
 
 
 class NewsItemOut(BaseModel):

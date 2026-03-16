@@ -35,6 +35,7 @@ class SystemStatusService:
     STATUS_KEY = 'system_status'
     TELEGRAM_PROXY_URL_KEY = 'telegram_proxy_url'
     TELEGRAM_PROXY_BUTTON_TEXT_KEY = 'telegram_proxy_button_text'
+    TELEGRAM_PROXIES_KEY = 'telegram_proxies'
     NEWS_KEY = 'system_news'
     PAYMENTS_ENABLED_KEY = 'payments_enabled'
 
@@ -108,6 +109,65 @@ class SystemStatusService:
         data = await self.get_payment_settings()
         return bool(data['enabled'])
 
+    def _normalize_proxy_items(self, raw_items: list[dict[str, object]] | None) -> list[dict[str, object]]:
+        normalized: list[dict[str, object]] = []
+        for item in raw_items or []:
+            country = str(item.get('country') or '').strip()
+            proxy_url = str(item.get('proxy_url') or '').strip()
+            button_text = str(item.get('button_text') or '').strip() or 'Подключить прокси'
+            if not country and not proxy_url:
+                continue
+            normalized.append(
+                {
+                    'id': str(item.get('id') or uuid.uuid4()),
+                    'country': country or 'Proxy',
+                    'proxy_url': proxy_url or None,
+                    'button_text': button_text,
+                    'enabled': bool(proxy_url),
+                }
+            )
+        return normalized[:8]
+
+    async def get_telegram_proxies(self) -> list[dict[str, object]]:
+        proxies_setting = await self.repo.get(self.TELEGRAM_PROXIES_KEY)
+        if proxies_setting and proxies_setting.value.strip():
+            try:
+                raw_items = json.loads(proxies_setting.value)
+            except json.JSONDecodeError:
+                raw_items = []
+            normalized = self._normalize_proxy_items(raw_items if isinstance(raw_items, list) else [])
+            if normalized:
+                return normalized
+
+        proxy_url_setting = await self.repo.get(self.TELEGRAM_PROXY_URL_KEY)
+        button_text_setting = await self.repo.get(self.TELEGRAM_PROXY_BUTTON_TEXT_KEY)
+        proxy_url = proxy_url_setting.value.strip() if proxy_url_setting and proxy_url_setting.value.strip() else None
+        button_text = (
+            button_text_setting.value.strip()
+            if button_text_setting and button_text_setting.value.strip()
+            else 'Подключить прокси'
+        )
+        if not proxy_url:
+            return []
+        return [
+            {
+                'id': 'primary',
+                'country': 'Основной',
+                'proxy_url': proxy_url,
+                'button_text': button_text,
+                'enabled': True,
+            }
+        ]
+
+    async def save_telegram_proxies(self, proxies: list[dict[str, object]]) -> list[dict[str, object]]:
+        normalized = self._normalize_proxy_items(proxies)
+        await self.repo.set(self.TELEGRAM_PROXIES_KEY, json.dumps(normalized, ensure_ascii=False))
+        primary = normalized[0] if normalized else None
+        await self.repo.set(self.TELEGRAM_PROXY_URL_KEY, primary['proxy_url'] if primary and primary.get('proxy_url') else '')
+        await self.repo.set(self.TELEGRAM_PROXY_BUTTON_TEXT_KEY, primary['button_text'] if primary else 'Подключить прокси')
+        await self.session.flush()
+        return normalized
+
     async def get_user_telegram_proxy(self, user: User) -> dict[str, object]:
         active_keys_count = int(
             (
@@ -121,20 +181,15 @@ class SystemStatusService:
             or 0
         )
         if active_keys_count <= 0:
-            return {'enabled': False, 'proxy_url': None, 'button_text': 'Подключить прокси'}
+            return {'enabled': False, 'proxy_url': None, 'button_text': 'Подключить прокси', 'proxies': []}
 
-        proxy_url_setting = await self.repo.get(self.TELEGRAM_PROXY_URL_KEY)
-        button_text_setting = await self.repo.get(self.TELEGRAM_PROXY_BUTTON_TEXT_KEY)
-        proxy_url = proxy_url_setting.value.strip() if proxy_url_setting and proxy_url_setting.value.strip() else None
-        button_text = (
-            button_text_setting.value.strip()
-            if button_text_setting and button_text_setting.value.strip()
-            else 'Подключить прокси'
-        )
+        proxies = await self.get_telegram_proxies()
+        primary = next((item for item in proxies if item.get('proxy_url')), None)
         return {
-            'enabled': bool(proxy_url),
-            'proxy_url': proxy_url,
-            'button_text': button_text,
+            'enabled': bool(primary),
+            'proxy_url': primary.get('proxy_url') if primary else None,
+            'button_text': str(primary.get('button_text') or 'Подключить прокси') if primary else 'Подключить прокси',
+            'proxies': proxies,
         }
 
     async def get_news(self) -> list[dict[str, object]]:
@@ -198,6 +253,23 @@ class SystemStatusService:
         await self.repo.set(self.NEWS_KEY, json.dumps(serialized_items, ensure_ascii=False))
         await self.session.flush()
         return news_id
+
+    async def delete_news(self, news_id: str) -> bool:
+        items = await self.get_news()
+        filtered = [item for item in items if str(item.get('id')) != str(news_id)]
+        if len(filtered) == len(items):
+            return False
+
+        serialized_items = [
+            {
+                **item,
+                'created_at': item['created_at'].isoformat() if isinstance(item.get('created_at'), datetime) else item.get('created_at'),
+            }
+            for item in filtered
+        ]
+        await self.repo.set(self.NEWS_KEY, json.dumps(serialized_items, ensure_ascii=False))
+        await self.session.flush()
+        return True
 
     async def ensure_user_operation_allowed(self, user: User) -> None:
         state = await self.get_status()
