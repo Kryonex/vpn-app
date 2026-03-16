@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import logging
+from urllib.parse import urljoin
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
@@ -35,6 +36,8 @@ def mini_app_keyboard() -> InlineKeyboardMarkup | None:
     if not settings.mini_app_url:
         return None
 
+    info_url = urljoin(settings.mini_app_url.rstrip('/') + '/', 'info.html')
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -42,7 +45,13 @@ def mini_app_keyboard() -> InlineKeyboardMarkup | None:
                     text='Открыть ZERO',
                     web_app=WebAppInfo(url=settings.mini_app_url),
                 )
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    text='Информация',
+                    url=info_url,
+                )
+            ],
         ]
     )
 

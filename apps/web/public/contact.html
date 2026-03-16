@@ -1,0 +1,102 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZERO — Обратная связь</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, rgba(255,255,255,0.08), transparent 28%), linear-gradient(180deg, #050505, #101010);
+        color: #f5f5f5;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+      .card {
+        border-radius: 24px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.06);
+        backdrop-filter: blur(22px);
+        -webkit-backdrop-filter: blur(22px);
+        box-shadow: 0 24px 60px rgba(0,0,0,0.28);
+        padding: 22px;
+      }
+      h1 { margin: 0 0 10px; font-size: clamp(28px, 5vw, 42px); letter-spacing: -0.05em; }
+      p { margin: 0; line-height: 1.6; color: rgba(255,255,255,0.8); }
+      form { display: grid; gap: 12px; margin-top: 18px; }
+      input, textarea, button {
+        font: inherit;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        padding: 14px 16px;
+      }
+      textarea { min-height: 140px; resize: vertical; }
+      button {
+        min-height: 52px;
+        cursor: pointer;
+        font-weight: 600;
+        background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.1));
+      }
+      .muted { font-size: 14px; color: rgba(255,255,255,0.62); }
+      .success, .error { margin-top: 14px; padding: 14px 16px; border-radius: 16px; }
+      .success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.28); }
+      .error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.28); }
+      .top-link { display: inline-block; margin-top: 14px; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <p class="muted">Тикет-система</p>
+        <h1>Обратная связь ZERO</h1>
+        <p>Оставьте обращение через форму ниже. Сообщение будет зарегистрировано как тикет, а ответ придёт на указанный email.</p>
+        <form id="ticket-form">
+          <input type="text" name="name" placeholder="Ваше имя" required minlength="2" maxlength="120" />
+          <input type="email" name="email" placeholder="Email для ответа" required maxlength="254" />
+          <input type="text" name="telegram_username" placeholder="Telegram username (необязательно)" maxlength="64" />
+          <input type="text" name="subject" placeholder="Тема обращения" required minlength="3" maxlength="160" />
+          <textarea name="message" placeholder="Опишите ваш вопрос" required minlength="10" maxlength="4000"></textarea>
+          <button type="submit">Отправить обращение</button>
+        </form>
+        <div id="success" class="success" hidden></div>
+        <div id="error" class="error" hidden></div>
+        <a class="top-link" href="/info.html">Вернуться к информации о ZERO</a>
+      </section>
+    </main>
+    <script>
+      const form = document.getElementById('ticket-form');
+      const success = document.getElementById('success');
+      const error = document.getElementById('error');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        success.hidden = true;
+        error.hidden = true;
+
+        const formData = new FormData(form);
+        const payload = Object.fromEntries(formData.entries());
+
+        try {
+          const response = await fetch('/api/support/tickets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.detail || 'Не удалось отправить обращение.');
+          }
+          success.textContent = `${data.message} Номер тикета: ${data.ticket_id}`;
+          success.hidden = false;
+          form.reset();
+        } catch (err) {
+          error.textContent = err instanceof Error ? err.message : 'Не удалось отправить обращение.';
+          error.hidden = false;
+        }
+      });
+    </script>
+  </body>
+</html>
