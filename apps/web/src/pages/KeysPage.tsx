@@ -23,7 +23,7 @@ export function KeysPage() {
   useEffect(() => {
     apiRequest<VPNKey[]>('/keys')
       .then(setKeys)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить доступы'))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить профили'))
       .finally(() => setLoading(false));
     apiRequest<TelegramProxyAccess>('/system/telegram-proxy').then(setProxyAccess).catch(() => null);
   }, []);
@@ -32,19 +32,19 @@ export function KeysPage() {
     const uri = key.active_version?.connection_uri;
     if (!uri) return;
     await navigator.clipboard.writeText(uri);
-    setMessage(`Ссылка для доступа «${key.display_name}» скопирована.`);
+    setMessage(`Служебная ссылка «${key.display_name}» скопирована.`);
   };
 
   const removeKey = async (keyId: string) => {
-    if (!window.confirm('Удалить этот доступ из истории?')) return;
+    if (!window.confirm('Удалить этот профиль из истории?')) return;
 
     try {
       await apiRequest(`/keys/${keyId}`, { method: 'DELETE' });
       setKeys((prev) => prev.filter((item) => item.id !== keyId));
-      setMessage('Доступ удалён из истории.');
+      setMessage('Профиль удалён из истории.');
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось удалить доступ');
+      setError(err instanceof Error ? err.message : 'Не удалось удалить профиль');
     }
   };
 
@@ -58,15 +58,19 @@ export function KeysPage() {
     setProxyChooserOpen(true);
   };
 
+  const regionButtonLabel = (proxyAccess?.proxies?.filter((item) => item.enabled && item.proxy_url).length ?? 0) > 1
+    ? 'Выбрать регион'
+    : 'Открыть вариант';
+
   return (
     <section className="stack">
-      <PageHeader title="Доступы" subtitle="Все активные и архивные подключения ZERO с быстрыми действиями" />
+      <PageHeader title="Профили" subtitle="Все активные и архивные профили ZERO с быстрыми действиями" />
       <SystemStatusBanner status={systemStatus} compact />
 
       {loading && <SkeletonCards count={3} />}
       {error && <ErrorState text={error} />}
       {!loading && !error && keys.length === 0 && (
-        <EmptyState title="Пока нет доступов" text="Создайте первую заявку в разделе «Купить», и здесь появится ваше подключение." />
+        <EmptyState title="Пока нет профилей" text="Создайте первую заявку в разделе «Купить», и здесь появится ваш профиль." />
       )}
 
       {!loading && !error && keys.map((key) => (
@@ -88,8 +92,8 @@ export function KeysPage() {
           ) : (
             <p className="muted">
               {key.status === 'revoked'
-                ? 'Этот доступ уже отключён. Его можно удалить из истории или создать новый.'
-                : 'Ссылка подключения появится здесь, как только доступ будет окончательно подготовлен.'}
+                ? 'Этот профиль уже отключён. Его можно удалить из истории или создать новый.'
+                : 'Служебная ссылка появится здесь, как только профиль будет окончательно подготовлен.'}
             </p>
           )}
 
@@ -99,7 +103,7 @@ export function KeysPage() {
             </Link>
             {proxyAccess?.enabled && key.status === 'active' && (
               <button className="btn btn-ghost" onClick={openProxy}>
-                <KeyRound size={16} /> {proxyAccess.button_text}
+                <KeyRound size={16} /> {regionButtonLabel}
               </button>
             )}
             <button className="btn btn-ghost" onClick={() => void copyUri(key)} disabled={!key.active_version?.connection_uri}>
@@ -122,8 +126,8 @@ export function KeysPage() {
           <div className="modal-card liquid-modal" onClick={(event) => event.stopPropagation()}>
             <div className="row-between">
               <div>
-                <p className="title-line">Выберите прокси</p>
-                <p className="muted">Выберите страну, через которую хотите подключиться.</p>
+                <p className="title-line">Выберите регион</p>
+                <p className="muted">Выберите подходящий вариант открытия профиля.</p>
               </div>
               <button className="icon-button" onClick={() => setProxyChooserOpen(false)}><X size={16} /></button>
             </div>

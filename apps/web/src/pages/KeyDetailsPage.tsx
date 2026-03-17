@@ -13,8 +13,8 @@ import { openTelegramProxy } from '../telegram';
 import type { TelegramProxyAccess, VPNKey } from '../types/models';
 
 const connectionGuide = [
-  'Нажмите «Добавить в Happ», если приложение уже установлено и умеет открывать такие ссылки.',
-  'Если кнопка не сработает, скопируйте ссылку ниже и вставьте её вручную в Happ или другое совместимое приложение.',
+  'Нажмите «Открыть в приложении», если подходящее приложение уже установлено и умеет обрабатывать такие ссылки.',
+  'Если кнопка не сработает, скопируйте ссылку ниже и вставьте её вручную в подходящее совместимое приложение.',
   'Для быстрого импорта можно использовать QR-код прямо с этого экрана.',
 ] as const;
 
@@ -45,7 +45,7 @@ export function KeyDetailsPage() {
     const uri = keyData?.active_version?.connection_uri;
     if (!uri) return;
     await navigator.clipboard.writeText(uri);
-    setMessage('Ссылка подключения скопирована.');
+    setMessage('Служебная ссылка скопирована.');
   };
 
   const rotate = async () => {
@@ -94,10 +94,13 @@ export function KeyDetailsPage() {
   const uri = keyData.active_version?.connection_uri;
   const deletionAllowed = keyData.status !== 'active' || !keyData.active_version;
   const happHref = uri || null;
+  const regionButtonLabel = (proxyAccess?.proxies?.filter((item) => item.enabled && item.proxy_url).length ?? 0) > 1
+    ? 'Выбрать регион'
+    : 'Открыть вариант';
 
   return (
     <section className="stack">
-      <PageHeader title={keyData.display_name} subtitle="Подключение, срок действия и быстрые действия" />
+      <PageHeader title={keyData.display_name} subtitle="Профиль, срок действия и быстрые действия" />
       <SystemStatusBanner status={systemStatus} compact />
 
       <article className="glass-card liquid-panel">
@@ -118,12 +121,12 @@ export function KeyDetailsPage() {
       {uri ? (
         <>
           <article className="glass-card liquid-panel">
-            <p className="muted">Ссылка подключения</p>
+            <p className="muted">Служебная ссылка</p>
             <p className="mono-block">{uri}</p>
             <div className="action-row">
               {happHref && (
                 <a className="btn btn-primary" href={happHref}>
-                  <ExternalLink size={16} /> Добавить в Happ
+                  <ExternalLink size={16} /> Открыть в приложении
                 </a>
               )}
               <button className="btn btn-ghost" onClick={copyUri}>
@@ -131,7 +134,7 @@ export function KeyDetailsPage() {
               </button>
               {proxyAccess?.enabled && keyData.status === 'active' && (
                 <button className="btn btn-ghost" onClick={openProxy}>
-                  <KeyRound size={16} /> {proxyAccess.button_text}
+                  <KeyRound size={16} /> {regionButtonLabel}
                 </button>
               )}
               <button className="btn btn-ghost" onClick={rotate} disabled={rotating || Boolean(systemStatus?.maintenance_mode)}>
@@ -144,7 +147,7 @@ export function KeyDetailsPage() {
           </article>
 
           <article className="glass-card liquid-panel">
-            <p className="title-line">Как подключить ZERO</p>
+            <p className="title-line">Как открыть профиль ZERO</p>
             <div className="stack compact-stack">
               {connectionGuide.map((item, index) => (
                 <div key={item} className="hint-row">
@@ -165,7 +168,7 @@ export function KeyDetailsPage() {
         </>
       ) : (
         <EmptyState
-          title="Ссылка подключения пока недоступна"
+          title="Служебная ссылка пока недоступна"
           text={
             keyData.status === 'revoked'
               ? 'Этот доступ уже отключён. Вы можете удалить его из истории или создать новый.'
@@ -179,8 +182,8 @@ export function KeyDetailsPage() {
           <div className="modal-card liquid-modal" onClick={(event) => event.stopPropagation()}>
             <div className="row-between">
               <div>
-                <p className="title-line">Выберите прокси</p>
-                <p className="muted">Выберите страну, через которую хотите подключиться.</p>
+                <p className="title-line">Выберите регион</p>
+                <p className="muted">Выберите подходящий вариант открытия профиля.</p>
               </div>
               <button className="icon-button" onClick={() => setProxyChooserOpen(false)}><X size={16} /></button>
             </div>

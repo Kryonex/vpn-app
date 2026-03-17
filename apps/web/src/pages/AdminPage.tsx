@@ -56,6 +56,11 @@ const statusOptions: Array<{ value: SystemStatus['status']; label: string }> = [
 ];
 
 const userLabel = (user: AdminUser) => user.telegram_username ? `@${user.telegram_username}` : user.telegram_user_id ? `tg_${user.telegram_user_id}` : `user_${user.id.slice(0, 8)}`;
+const normalizeVariantButtonText = (value: string | null | undefined) => {
+  const trimmed = value?.trim();
+  if (!trimmed || /прокси/i.test(trimmed)) return 'Открыть вариант';
+  return trimmed;
+};
 
 function FoldableSection({
   title,
@@ -102,7 +107,7 @@ export function AdminPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettingsState>({ enabled: true, mode: 'direct' });
-  const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Подключить прокси', enabled: false, proxies: [] });
+  const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Открыть вариант', enabled: false, proxies: [] });
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [availableInbounds, setAvailableInbounds] = useState<AdminInbound[]>([]);
   const [purchaseInboundIds, setPurchaseInboundIds] = useState<number[]>([]);
@@ -232,7 +237,17 @@ export function AdminPage() {
             setPaymentSettings(result.value as PaymentSettingsState);
             break;
           case 'telegram_proxy':
-            setTelegramProxy(result.value as TelegramProxySettings);
+            {
+              const proxySettings = result.value as TelegramProxySettings;
+              setTelegramProxy({
+                ...proxySettings,
+                button_text: normalizeVariantButtonText(proxySettings.button_text),
+                proxies: proxySettings.proxies.map((item) => ({
+                  ...item,
+                  button_text: normalizeVariantButtonText(item.button_text),
+                })),
+              });
+            }
             break;
           case 'system_news':
             setNewsItems((result.value as { items: NewsItem[] }).items);
@@ -301,7 +316,7 @@ export function AdminPage() {
 
   const addProxyDraft = () => setTelegramProxy((prev) => ({
     ...prev,
-    proxies: [...prev.proxies, { id: crypto.randomUUID(), country: '', proxy_url: null, button_text: prev.button_text || 'Подключить прокси', enabled: false }],
+    proxies: [...prev.proxies, { id: crypto.randomUUID(), country: '', proxy_url: null, button_text: prev.button_text || 'Открыть вариант', enabled: false }],
   }));
 
   const updateProxyDraft = (id: string, field: keyof TelegramProxyItem, value: string) => setTelegramProxy((prev) => ({
@@ -581,7 +596,7 @@ export function AdminPage() {
           )}
         </FoldableSection>
 
-        <FoldableSection title="Telegram-прокси" subtitle="Несколько прокси с выбором страны для пользователя" icon={<Link2 size={16} />} defaultOpen={false}>
+        <FoldableSection title="Региональные варианты" subtitle="Несколько вариантов с выбором региона для пользователя" icon={<Link2 size={16} />} defaultOpen={false}>
           <div className="admin-note">
             Ссылки хранятся на сервере в настройках приложения и не зашиваются в код репозитория.
           </div>
@@ -590,8 +605,8 @@ export function AdminPage() {
               <article key={proxy.id} className="admin-item">
                 <div className="row-between">
                   <div>
-                    <p className="title-line">Прокси {index + 1}</p>
-                    <p className="muted">Пользователь увидит эту страну при выборе подключения.</p>
+                    <p className="title-line">Вариант {index + 1}</p>
+                    <p className="muted">Пользователь увидит этот регион при выборе варианта.</p>
                   </div>
                   <button className="btn btn-danger-soft" onClick={() => removeProxyDraft(proxy.id)}>
                     <Trash2 size={16} /> Удалить
@@ -604,11 +619,11 @@ export function AdminPage() {
                   </label>
                   <label className="field">
                     <span className="field-label">Текст кнопки</span>
-                    <input className="input" value={proxy.button_text} onChange={(e) => updateProxyDraft(proxy.id, "button_text", e.target.value)} placeholder="Подключить прокси" />
+                    <input className="input" value={proxy.button_text} onChange={(e) => updateProxyDraft(proxy.id, "button_text", e.target.value)} placeholder="Открыть вариант" />
                   </label>
                 </div>
                 <label className="field">
-                  <span className="field-label">Ссылка прокси</span>
+                  <span className="field-label">Служебная ссылка</span>
                   <input className="input" type="password" value={proxy.proxy_url ?? ""} onChange={(e) => updateProxyDraft(proxy.id, "proxy_url", e.target.value)} placeholder="tg://proxy?server=..." />
                 </label>
               </article>
@@ -616,7 +631,7 @@ export function AdminPage() {
           </div>
           <div className="input-grid">
             <button className="btn btn-ghost" onClick={addProxyDraft}>
-              <Link2 size={16} /> Добавить прокси
+              <Link2 size={16} /> Добавить вариант
             </button>
             <button className="btn btn-primary" onClick={() => void run(async () => {
               const prepared = telegramProxy.proxies
@@ -624,29 +639,29 @@ export function AdminPage() {
                   ...item,
                   country: item.country.trim(),
                   proxy_url: item.proxy_url?.trim() || null,
-                  button_text: item.button_text.trim() || "Подключить прокси",
+                  button_text: item.button_text.trim() || "Открыть вариант",
                 }))
                 .filter((item) => item.country && item.proxy_url);
               const updated = await apiRequest<TelegramProxySettings>("/admin/system/telegram-proxy", {
                 method: "PATCH",
                 body: JSON.stringify({
                   proxy_url: prepared[0]?.proxy_url ?? null,
-                  button_text: prepared[0]?.button_text ?? "Подключить прокси",
+                  button_text: prepared[0]?.button_text ?? "Открыть вариант",
                   proxies: prepared,
                 }),
               });
               setTelegramProxy(updated);
-              await afterAction("Настройки Telegram-прокси сохранены.");
+              await afterAction("Региональные варианты сохранены.");
             })}>
-              <Link2 size={16} /> Сохранить прокси
+              <Link2 size={16} /> Сохранить варианты
             </button>
             <button className="btn btn-danger-soft" onClick={() => void run(async () => {
               const updated = await apiRequest<TelegramProxySettings>("/admin/system/telegram-proxy", {
                 method: "PATCH",
-                body: JSON.stringify({ proxy_url: null, button_text: "Подключить прокси", proxies: [] }),
+                body: JSON.stringify({ proxy_url: null, button_text: "Открыть вариант", proxies: [] }),
               });
               setTelegramProxy(updated);
-              await afterAction("Telegram-прокси отключены.");
+              await afterAction("Региональные варианты отключены.");
             })}>
               <Trash2 size={16} /> Отключить все
             </button>
@@ -680,7 +695,7 @@ export function AdminPage() {
           <div className="divider" />
           <label className="field"><span className="field-label">@username</span><input className="input" value={bindUsername} onChange={(e) => setBindUsername(e.target.value)} placeholder="@username" /></label>
           <div className="input-grid">
-            <label className="field"><span className="field-label">Название ключа</span><input className="input" value={bindDisplayName} onChange={(e) => setBindDisplayName(e.target.value)} placeholder="VPN ключ" /></label>
+            <label className="field"><span className="field-label">Название профиля</span><input className="input" value={bindDisplayName} onChange={(e) => setBindDisplayName(e.target.value)} placeholder="Основной профиль" /></label>
             <label className="field"><span className="field-label">UUID клиента</span><input className="input" value={bindClientUuid} onChange={(e) => setBindClientUuid(e.target.value)} placeholder="client uuid" /></label>
           </div>
           <label className="field">

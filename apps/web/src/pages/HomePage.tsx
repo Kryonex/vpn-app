@@ -21,30 +21,30 @@ import type {
 const onboardingSteps = [
   {
     title: 'Это ваш центр управления ZERO',
-    text: 'Здесь видно активный доступ, бонусные дни, приглашения, новости и быстрые действия. Если вы открыли ZERO впервые, начните отсюда.',
+    text: 'Здесь видны активный профиль, бонусные дни, приглашения, новости и быстрые действия. Если вы открыли ZERO впервые, начните отсюда.',
   },
   {
-    title: 'Доступы находятся внутри кабинета',
-    text: 'Откройте доступы, чтобы скопировать ссылку подключения, посмотреть срок действия, продлить или перевыпустить конфигурацию.',
+    title: 'Профили находятся внутри кабинета',
+    text: 'Откройте профили, чтобы скопировать служебную ссылку, посмотреть срок действия, продлить или обновить конфигурацию.',
   },
   {
     title: 'Покупка и продление в одном месте',
-    text: 'Во вкладке «Купить» собраны тарифы, заявки и история. Если прямые платежи отключены, ZERO сразу переведет вас к администратору.',
+    text: 'Во вкладке «Купить» собраны тарифы, заявки и история. Если прямые платежи отключены, ZERO сразу переведёт вас к администратору.',
   },
 ];
 
 const faq = [
   {
-    question: 'Как подключить ускорение?',
-    answer: 'Откройте нужный доступ, скопируйте ссылку подключения или нажмите кнопку быстрого добавления в приложение Happ.',
+    question: 'Как начать работу с профилем?',
+    answer: 'Откройте нужный профиль, скопируйте служебную ссылку или нажмите кнопку быстрого открытия в подходящем приложении.',
   },
   {
-    question: 'Как продлить доступ?',
+    question: 'Как продлить профиль?',
     answer: 'Перейдите в раздел покупки, создайте заявку на продление и дождитесь подтверждения. Срок действия обновится без лишних шагов.',
   },
   {
-    question: 'Что делать, если ускорение не работает?',
-    answer: 'Откройте карточку доступа и перевыпустите конфигурацию. Если проблема останется, напишите администратору через окно помощи.',
+    question: 'Что делать, если профиль не открывается?',
+    answer: 'Откройте карточку профиля и обновите конфигурацию. Если проблема останется, напишите администратору через окно помощи.',
   },
 ];
 
@@ -88,7 +88,7 @@ export function HomePage() {
 
   const nearestExpiry = me.nearest_expiry
     ? new Date(me.nearest_expiry).toLocaleString()
-    : 'Активный доступ пока не найден';
+    : 'Активный профиль пока не найден';
   const displayName = telegramProfile?.first_name || me.telegram?.first_name || me.telegram?.username || 'Пользователь';
   const username = telegramProfile?.username || me.telegram?.username || null;
   const avatar = telegramProfile?.photo_url || null;
@@ -99,10 +99,10 @@ export function HomePage() {
   const quickIntent = useMemo(() => {
     if (me.active_keys_count > 0) {
       return {
-        title: 'Ускорение уже активно',
-        text: 'Откройте доступы, чтобы быстро скопировать ссылку, проверить срок и обновить конфигурацию.',
+        title: 'Профиль уже активен',
+        text: 'Откройте профили, чтобы быстро скопировать служебную ссылку, проверить срок и обновить конфигурацию.',
         to: '/keys',
-        label: 'Открыть доступы',
+        label: 'Открыть профили',
         icon: KeyRound,
       };
     }
@@ -110,15 +110,15 @@ export function HomePage() {
     if (trialStatus?.eligible) {
       return {
         title: 'Для вас доступен пробный период',
-        text: 'Активируйте бесплатные дни и сразу получите первый доступ без оплаты.',
+        text: 'Активируйте бесплатные дни и сразу получите первый профиль без оплаты.',
         to: '/keys',
-        label: 'Открыть доступы',
+        label: 'Открыть профили',
         icon: KeyRound,
       };
     }
 
     return {
-      title: 'Подключите ZERO за пару шагов',
+      title: 'Начните работу с ZERO',
       text: 'Выберите тариф, создайте заявку и продолжайте оформление в удобном для вас режиме.',
       to: '/buy',
       label: 'Выбрать тариф',
@@ -167,7 +167,7 @@ export function HomePage() {
     <section className="stack">
       <PageHeader
         title="Личный кабинет"
-        subtitle="Управление доступом, бонусами и новостями без лишнего шума"
+        subtitle="Управление профилем, бонусами и новостями без лишнего шума"
         action={
           <div className="page-header-actions">
             <button
@@ -208,7 +208,7 @@ export function HomePage() {
           <button className="metric-pill" onClick={() => setMetricInfo('keys')}>
             <span className="metric-pill-icon"><Zap size={14} /></span>
             <span className="metric-pill-value">{me.active_keys_count}</span>
-            <span className="metric-pill-label">доступы</span>
+            <span className="metric-pill-label">профили</span>
           </button>
           <button className="metric-pill" onClick={() => setMetricInfo('bonus')}>
             <span className="metric-pill-icon"><Sparkles size={14} /></span>
@@ -250,7 +250,7 @@ export function HomePage() {
         <div className="section-head">
           <div>
             <p className="title-line row-inline"><Gift size={16} /> Приглашения</p>
-            <p className="muted">Делитесь ZERO и получайте дополнительные дни доступа.</p>
+            <p className="muted">Делитесь ZERO и получайте дополнительные дни действия.</p>
           </div>
           <span className="chip">{referral?.bonus_days_balance ?? me.bonus_days_balance} дн.</span>
         </div>
@@ -279,7 +279,7 @@ export function HomePage() {
         <div className="stack compact-stack">
           <div className="hint-row">
             <Zap size={16} />
-            <span>{me.active_keys_count > 0 ? 'Откройте доступы, если хотите быстро скопировать ссылку подключения или продлить доступ.' : 'Перейдите в раздел покупки, чтобы выбрать тариф и создать первую заявку.'}</span>
+            <span>{me.active_keys_count > 0 ? 'Откройте профили, если хотите быстро скопировать служебную ссылку или продлить текущий профиль.' : 'Перейдите в раздел покупки, чтобы выбрать тариф и создать первую заявку.'}</span>
           </div>
           <div className="hint-row">
             <Newspaper size={16} />
@@ -300,14 +300,14 @@ export function HomePage() {
           <div className="modal-card liquid-modal metric-modal" onClick={(event) => event.stopPropagation()}>
             <div className="row-between">
               <div>
-                <p className="title-line">{metricInfo === 'keys' ? 'Активные доступы' : 'Бонусные дни'}</p>
-                <p className="muted">{metricInfo === 'keys' ? 'Короткое объяснение текущего статуса доступа.' : 'Короткое объяснение бонусного баланса.'}</p>
+                <p className="title-line">{metricInfo === 'keys' ? 'Активные профили' : 'Бонусные дни'}</p>
+                <p className="muted">{metricInfo === 'keys' ? 'Короткое объяснение текущего статуса профиля.' : 'Короткое объяснение бонусного баланса.'}</p>
               </div>
               <button className="icon-button" onClick={() => setMetricInfo(null)}><X size={16} /></button>
             </div>
             <p className="muted">
               {metricInfo === 'keys'
-                ? 'Это количество активных подключений ZERO, которыми можно пользоваться прямо сейчас. Нажмите на кнопку открытия доступа, чтобы посмотреть детали и ссылку подключения.'
+                ? 'Это количество активных профилей ZERO, которыми можно пользоваться прямо сейчас. Нажмите на кнопку открытия профиля, чтобы посмотреть детали и служебную ссылку.'
                 : 'Это запас бесплатных дней, который можно использовать при следующем продлении. Бонусы начисляются за приглашения и специальные акции.'}
             </p>
           </div>

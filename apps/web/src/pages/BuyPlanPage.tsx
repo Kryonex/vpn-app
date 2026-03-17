@@ -40,7 +40,7 @@ export function BuyPlanPage() {
         setPaymentSettings(paymentConfig);
         setSupport(supportData);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить данные для подключения'))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить данные для оформления'))
       .finally(() => setLoading(false));
 
     return () => {
@@ -76,7 +76,7 @@ export function BuyPlanPage() {
       await refreshPayments();
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать заявку на подключение');
+      setError(err instanceof Error ? err.message : 'Не удалось создать заявку');
     }
   };
 
@@ -95,7 +95,7 @@ export function BuyPlanPage() {
 
   return (
     <section className="stack">
-      <PageHeader title="Покупка и продление" subtitle="Подключение, продление и заявки собраны в одном аккуратном экране" />
+      <PageHeader title="Покупка и продление" subtitle="Оформление, продление и заявки собраны в одном аккуратном экране" />
       <SystemStatusBanner status={systemStatus} compact />
 
       {loading && <SkeletonCards count={3} />}
@@ -127,7 +127,7 @@ export function BuyPlanPage() {
           <p className="title-line">Заявка создана</p>
           <p className="muted">
             {paymentSettings.enabled
-              ? 'Мы уже подготовили данные для перевода. После подтверждения оплаты доступ появится в разделе с подключениями.'
+              ? 'Мы уже подготовили данные для перевода. После подтверждения оплаты профиль появится в разделе с профилями.'
               : 'Теперь откройте чат с администратором. Он отправит реквизиты и проведёт вас дальше вручную.'}
           </p>
         </article>
@@ -139,7 +139,7 @@ export function BuyPlanPage() {
           <div className="stack compact-stack">
             <div className="hint-row"><span className="step-badge">1</span><span>Переведите оплату на номер <strong>{transferPhone}</strong>.</span></div>
             <div className="hint-row"><span className="step-badge">2</span><span>Укажите комментарий к переводу, чтобы администратор быстро нашёл заявку.</span></div>
-            <div className="hint-row"><span className="step-badge">3</span><span>После перевода отправьте чек администратору. Он подтвердит оплату и активирует доступ.</span></div>
+            <div className="hint-row"><span className="step-badge">3</span><span>После перевода отправьте чек администратору. Он подтвердит оплату и активирует профиль.</span></div>
           </div>
           <p className="muted">Комментарий к переводу</p>
           <p className="mono-block">{transferNote || 'ZERO заявка'}</p>
@@ -169,8 +169,8 @@ export function BuyPlanPage() {
       <article className="glass-card liquid-panel buy-section-card">
         <div className="section-head">
           <div>
-            <p className="title-line row-inline"><ReceiptText size={16} /> Продлить действующий доступ</p>
-            <p className="muted">Если доступ уже активен, продлить его можно без перевыпуска и без лишнего поиска по интерфейсу.</p>
+            <p className="title-line row-inline"><ReceiptText size={16} /> Продлить действующий профиль</p>
+            <p className="muted">Если профиль уже активен, продлить его можно без перевыпуска и без лишнего поиска по интерфейсу.</p>
           </div>
         </div>
         <div className="stack compact-stack">
@@ -194,7 +194,7 @@ export function BuyPlanPage() {
           ))}
           {!renewableKeys.length && (
             <p className="muted">
-              Активных доступов для продления пока нет. Ниже можно оформить новую заявку на подключение.
+              Активных профилей для продления пока нет. Ниже можно оформить новую заявку.
             </p>
           )}
         </div>
@@ -203,8 +203,8 @@ export function BuyPlanPage() {
       <article className="glass-card liquid-panel buy-section-card">
         <div className="section-head">
           <div>
-            <p className="title-line row-inline"><CircleDollarSign size={16} /> Новое подключение</p>
-            <p className="muted">Выберите подходящий режим ускорения и создайте новую заявку.</p>
+            <p className="title-line row-inline"><CircleDollarSign size={16} /> Новый профиль</p>
+            <p className="muted">Выберите подходящий тариф и создайте новую заявку.</p>
           </div>
         </div>
         <div className="stack compact-stack">
@@ -213,7 +213,7 @@ export function BuyPlanPage() {
               <div className="row-between card-topline">
                 <div>
                   <p className="title-line">{plan.name}</p>
-                  <p className="muted">{plan.duration_days} дней доступа</p>
+                  <p className="muted">{plan.duration_days} дней действия</p>
                 </div>
                 <p className="price-line">{plan.price} {plan.currency}</p>
               </div>
