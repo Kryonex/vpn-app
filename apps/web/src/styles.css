@@ -2167,6 +2167,16 @@ textarea.input {
   -webkit-backdrop-filter: blur(18px);
 }
 
+.browser-auth-form,
+.web-access-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.browser-auth-submit {
+  width: 100%;
+}
+
 .browser-auth-widget {
   display: grid;
   justify-items: center;
@@ -2197,4 +2207,21 @@ textarea.input {
   color: rgba(255, 255, 255, 0.78);
   line-height: 1.45;
   text-align: left;
+}
+
+.copy-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.copy-line .title-line {
+  margin: 0;
+}
+
+.chip-warn {
+  color: #ffe1a6;
+  border-color: rgba(255, 191, 87, 0.35);
+  background: rgba(255, 191, 87, 0.12);
 }

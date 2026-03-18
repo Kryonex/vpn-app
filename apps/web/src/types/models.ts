@@ -70,6 +70,12 @@ export type MeResponse = {
   } | null;
 };
 
+export type WebAccessStatus = {
+  login_id: string;
+  has_password: boolean;
+  updated_at: string | null;
+};
+
 export type SystemStatus = {
   status: 'online' | 'degraded' | 'maintenance' | 'panel_unavailable' | 'server_unavailable';
   message: string | null;

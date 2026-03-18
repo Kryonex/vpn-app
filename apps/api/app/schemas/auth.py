@@ -17,6 +17,22 @@ class TelegramWebsiteAuthRequest(BaseModel):
     hash: str
 
 
+class WebAccessLoginRequest(BaseModel):
+    login_id: str
+    password: str
+
+
+class WebAccessSetupRequest(BaseModel):
+    password: str
+    regenerate_login_id: bool = False
+
+
+class WebAccessStatusResponse(BaseModel):
+    login_id: str
+    has_password: bool
+    updated_at: str | None = None
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = 'bearer'
