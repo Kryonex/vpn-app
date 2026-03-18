@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import rate_limit
 from app.core.security import TelegramAuthError
 from app.db.session import get_session
-from app.schemas.auth import AuthResponse, TelegramAuthRequest
+from app.schemas.auth import AuthResponse, PublicAuthConfigResponse, TelegramAuthRequest
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix='/auth', tags=['auth'])
@@ -39,6 +39,18 @@ async def auth_telegram(payload: TelegramAuthRequest, session: AsyncSession = De
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Internal auth error') from exc
 
     return AuthResponse(access_token=token)
+
+
+@router.get('/public-config', response_model=PublicAuthConfigResponse)
+async def public_auth_config() -> PublicAuthConfigResponse:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return PublicAuthConfigResponse(
+        enabled=bool(settings.bot_token and settings.bot_username),
+        bot_username=settings.bot_username or None,
+        mini_app_url=settings.mini_app_url or None,
+    )
 
 
 
