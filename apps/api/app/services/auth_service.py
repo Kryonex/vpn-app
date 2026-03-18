@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_access_token, validate_telegram_init_data, validate_telegram_login_data
+from app.core.security import create_access_token, validate_telegram_init_data
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.audit_log import AuditLog
 from app.models.enums import SubscriptionStatus, VPNKeyStatus
@@ -36,12 +36,6 @@ class AuthService:
         validated = validate_telegram_init_data(init_data, bot_token)
         user = await self._authenticate_telegram_user(validated['user'], validated.get('start_param'))
 
-        token = create_access_token(str(user.id))
-        return user, token
-
-    async def authenticate_telegram_website(self, auth_data: dict[str, Any], bot_token: str) -> tuple[User, str]:
-        validated = validate_telegram_login_data(auth_data, bot_token)
-        user = await self._authenticate_telegram_user(validated['user'], None)
         token = create_access_token(str(user.id))
         return user, token
 

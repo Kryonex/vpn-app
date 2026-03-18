@@ -150,28 +150,6 @@ export function openTelegramProxy(rawUrl: string): void {
   }
 }
 
-export function openProxyThenBot(rawProxyUrl: string, botUrl: string): void {
-  const normalizedProxyUrl = normalizeTelegramProxyUrl(rawProxyUrl);
-  const normalizedBotUrl = botUrl.trim();
-
-  if (!normalizedProxyUrl || !normalizedBotUrl) {
-    return;
-  }
-
-  try {
-    const popup = window.open(normalizedProxyUrl, '_blank', 'noopener,noreferrer');
-    if (!popup) {
-      window.location.href = normalizedProxyUrl;
-    }
-  } catch {
-    window.location.href = normalizedProxyUrl;
-  }
-
-  window.setTimeout(() => {
-    window.location.href = normalizedBotUrl;
-  }, 1200);
-}
-
 export function openTelegramPage(rawUrl: string): void {
   const normalizedUrl = rawUrl.trim();
   const webApp = window.Telegram?.WebApp;

@@ -1,13 +1,7 @@
-﻿import { ExternalLink, ShieldCheck } from 'lucide-react';
+﻿import { Copy, ExternalLink, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiRequest } from '../api/client';
-import { openProxyThenBot } from '../telegram';
-
-type PublicAuthConfig = {
-  bot_username: string | null;
-  mini_app_url: string | null;
-};
 
 type PublicTelegramAccess = {
   enabled: boolean;
@@ -22,21 +16,15 @@ type PublicTelegramAccess = {
 };
 
 export function ExternalBrowserAuth() {
-  const [config, setConfig] = useState<PublicAuthConfig | null>(null);
   const [publicAccess, setPublicAccess] = useState<PublicTelegramAccess | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProxy, setSelectedProxy] = useState<PublicTelegramAccess['proxies'][number] | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      apiRequest<PublicAuthConfig>('/auth/public-config'),
-      apiRequest<PublicTelegramAccess>('/system/public-telegram-access'),
-    ])
-      .then(([authConfig, accessConfig]) => {
-        setConfig(authConfig);
-        setPublicAccess(accessConfig);
-      })
+    apiRequest<PublicTelegramAccess>('/system/public-telegram-access')
+      .then(setPublicAccess)
       .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось подготовить страницу доступа.'))
       .finally(() => setLoading(false));
   }, []);
@@ -46,22 +34,25 @@ export function ExternalBrowserAuth() {
     [publicAccess],
   );
 
-  const handleConnect = () => {
-    if (!publicAccess?.bot_url || availableProxies.length === 0) {
-      setError('Резервный доступ пока не настроен. Откройте бота напрямую или обратитесь к администратору.');
-      return;
-    }
-
-    const proxy = availableProxies[Math.floor(Math.random() * availableProxies.length)];
-    if (!proxy?.proxy_url) {
-      setError('Не удалось выбрать служебный маршрут. Попробуйте ещё раз.');
-      return;
-    }
-
-    setBusy(true);
+  const revealProxy = () => {
+    setCopied(false);
     setError(null);
-    openProxyThenBot(proxy.proxy_url, publicAccess.bot_url);
-    window.setTimeout(() => setBusy(false), 1600);
+    if (availableProxies.length === 0) {
+      setSelectedProxy(null);
+      setError('Ссылка пока не настроена. Добавьте активный маршрут в админке.');
+      return;
+    }
+    const proxy = availableProxies[Math.floor(Math.random() * availableProxies.length)] ?? null;
+    setSelectedProxy(proxy);
+  };
+
+  const copyProxy = async () => {
+    if (!selectedProxy?.proxy_url) {
+      return;
+    }
+    await navigator.clipboard.writeText(selectedProxy.proxy_url);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   };
 
   return (
@@ -70,39 +61,44 @@ export function ExternalBrowserAuth() {
       <div className="browser-cover-mark" aria-hidden="true" />
       <div className="browser-cover-copy">
         <h1>ZERO</h1>
-        <p>Сайт работает как витрина. Для доступа к личному кабинету и материалам откройте бота через служебный маршрут.</p>
+        <p>Эта страница работает как витрина. Для полноценной работы откройте бота и используйте служебную ссылку ниже, если нужен обходной маршрут.</p>
       </div>
 
       <div className="browser-auth-card browser-stub-card">
-        <p className="title-line">Получить доступ через бота</p>
-        <p className="muted">
-          Кнопка ниже сначала попробует открыть один из настроенных маршрутов доступа, а затем переведёт вас прямо в бота ZERO.
-        </p>
-        <button className="btn btn-primary browser-auth-submit" onClick={handleConnect} disabled={loading || busy || availableProxies.length === 0 || !publicAccess?.bot_url}>
-          {busy ? 'Подключаем маршрут и открываем бота...' : 'Получить доступ через бота'}
+        <p className="title-line">Получить ссылку для входа</p>
+        <p className="muted">Кнопка ниже покажет одну из активных служебных ссылок, которые уже указаны в панели администратора.</p>
+        <button className="btn btn-primary browser-auth-submit" onClick={revealProxy} disabled={loading}>
+          {loading ? 'Подготавливаем...' : 'Показать ссылку'}
         </button>
-        {availableProxies.length > 0 && (
-          <p className="muted">
-            Доступно маршрутов: {availableProxies.length}. Для перехода будет выбран любой активный вариант из панели.
-          </p>
+
+        {selectedProxy?.proxy_url && (
+          <div className="proxy-reveal-card">
+            <div className="row-between compact-row">
+              <div>
+                <p className="title-line">{selectedProxy.country}</p>
+                <p className="muted">Скопируйте ссылку и откройте её в Telegram.</p>
+              </div>
+              <button className="icon-button" onClick={() => void copyProxy()} title="Скопировать ссылку">
+                <Copy size={16} />
+              </button>
+            </div>
+            <p className="mono-block proxy-link-block">{selectedProxy.proxy_url}</p>
+            {copied && <p className="muted">Ссылка скопирована.</p>}
+          </div>
         )}
+
         {error && <p className="browser-auth-error">{error}</p>}
       </div>
 
       <div className="browser-cover-actions">
         {publicAccess?.bot_url && (
           <a className="btn btn-ghost browser-cover-btn" href={publicAccess.bot_url} target="_blank" rel="noreferrer">
-            <ExternalLink size={16} /> Открыть бота напрямую
-          </a>
-        )}
-        {config?.mini_app_url && (
-          <a className="btn btn-ghost browser-cover-btn" href={config.mini_app_url} target="_blank" rel="noreferrer">
-            <ExternalLink size={16} /> Открыть сайт вручную
+            <ExternalLink size={16} /> Открыть бота
           </a>
         )}
         <div className="browser-cover-note">
           <ShieldCheck size={16} />
-          <span>Основной сценарий для работы с ZERO остаётся через бота. Если Telegram открывается нестабильно, используйте кнопку подключения выше.</span>
+          <span>Основной путь работы с ZERO остаётся через бота. Сайт здесь только помогает быстро получить служебную ссылку и перейти дальше.</span>
         </div>
       </div>
     </section>

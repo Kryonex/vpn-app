@@ -1,6 +1,5 @@
 ﻿import {
   CircleHelp, Copy, FileText, Gift, KeyRound, Newspaper, Rocket, ShieldCheck, Sparkles, Wallet, Zap, X,
-  RefreshCw,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,7 +17,6 @@ import type {
   ReferralMe,
   SupportContact,
   SystemNewsList,
-  WebAccessStatus,
 } from '../types/models';
 
 const onboardingSteps = [
@@ -58,13 +56,10 @@ export function HomePage() {
   const [news, setNews] = useState<SystemNewsList['items']>([]);
   const [trialStatus, setTrialStatus] = useState<FreeTrialStatus | null>(null);
   const [backupAccess, setBackupAccess] = useState<BackupAccessSettings | null>(null);
-  const [webAccess, setWebAccess] = useState<WebAccessStatus | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [metricInfo, setMetricInfo] = useState<'keys' | 'bonus' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [webPassword, setWebPassword] = useState('');
-  const [savingWebAccess, setSavingWebAccess] = useState(false);
   const [activatingTrial, setActivatingTrial] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -75,7 +70,6 @@ export function HomePage() {
     apiRequest<SystemNewsList>('/system/news').then((data) => setNews(data.items)).catch(() => null);
     apiRequest<FreeTrialStatus>('/system/free-trial').then(setTrialStatus).catch(() => null);
     apiRequest<BackupAccessSettings>('/system/backup-access').then(setBackupAccess).catch(() => null);
-    apiRequest<WebAccessStatus>('/me/web-access').then(setWebAccess).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -164,26 +158,6 @@ export function HomePage() {
     }
   };
 
-  const saveWebAccess = async (regenerateLoginId = false) => {
-    try {
-      setSavingWebAccess(true);
-      setLocalError(null);
-      const response = await apiRequest<WebAccessStatus>('/me/web-access', {
-        method: 'PUT',
-        body: JSON.stringify({
-          password: webPassword,
-          regenerate_login_id: regenerateLoginId,
-        }),
-      });
-      setWebAccess(response);
-      setWebPassword('');
-      setMessage(regenerateLoginId ? 'ID входа и пароль обновлены.' : 'Пароль для сайта сохранён.');
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'Не удалось обновить данные для входа на сайте.');
-    } finally {
-      setSavingWebAccess(false);
-    }
-  };
 
   const QuickIcon = quickIntent.icon;
   const trialReasonText =
@@ -299,47 +273,6 @@ export function HomePage() {
         </div>
       </article>
 
-      <article className="glass-card account-section liquid-panel">
-        <div className="section-head">
-          <div>
-            <p className="title-line row-inline"><ShieldCheck size={16} /> Вход на сайте</p>
-            <p className="muted">Запасной вход в тот же кабинет, если Telegram открывается нестабильно.</p>
-          </div>
-          {webAccess?.has_password ? <span className="chip">Готово</span> : <span className="chip chip-warn">Нужно задать пароль</span>}
-        </div>
-        <div className="referral-panel web-access-panel">
-          <div>
-            <p className="muted">ID входа</p>
-            <div className="copy-line">
-              <p className="title-line">{webAccess?.login_id ?? 'Подготавливаем...'}</p>
-              {webAccess?.login_id && (
-                <button className="icon-button" onClick={() => void navigator.clipboard.writeText(webAccess.login_id).then(() => setMessage('ID входа скопирован.'))}>
-                  <Copy size={16} />
-                </button>
-              )}
-            </div>
-          </div>
-          <label className="field-label">
-            <span>Новый пароль</span>
-            <input
-              className="input"
-              type="password"
-              value={webPassword}
-              onChange={(event) => setWebPassword(event.target.value)}
-              placeholder={webAccess?.has_password ? 'Введите новый пароль для сайта' : 'Задайте пароль для сайта'}
-            />
-          </label>
-          <div className="action-row compact-actions">
-            <button className="btn btn-primary" onClick={() => void saveWebAccess(false)} disabled={savingWebAccess || webPassword.trim().length < 8}>
-              <ShieldCheck size={16} /> {savingWebAccess ? 'Сохраняем...' : webAccess?.has_password ? 'Обновить пароль' : 'Сохранить пароль'}
-            </button>
-            <button className="btn btn-ghost" onClick={() => void saveWebAccess(true)} disabled={savingWebAccess || webPassword.trim().length < 8}>
-              <RefreshCw size={16} /> Сменить ID входа
-            </button>
-          </div>
-          <p className="muted">Этот вход открывает тот же кабинет, что и бот. ID входа можно брать из `/start`, а пароль менять здесь.</p>
-        </div>
-      </article>
 
       <article className="glass-card account-section liquid-panel">
         <div className="section-head">
@@ -462,3 +395,5 @@ export function HomePage() {
     </section>
   );
 }
+
+

@@ -14,7 +14,6 @@ from app.core.config import get_settings
 from app.core.redis import close_redis, get_redis
 from app.db.session import SessionLocal
 from app.services.auth_service import AuthService
-from app.services.web_access_service import WebAccessService
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -75,7 +74,7 @@ async def start_handler(message: Message) -> None:
 
     async with SessionLocal() as session:
         service = AuthService(session)
-        user = await service.upsert_from_bot_start(
+        await service.upsert_from_bot_start(
             telegram_user_id=message.from_user.id,
             username=message.from_user.username,
             first_name=message.from_user.first_name,
@@ -83,7 +82,6 @@ async def start_handler(message: Message) -> None:
             language_code=message.from_user.language_code,
             referral_code=referral_code,
         )
-        web_access = await WebAccessService(session).ensure_bot_credentials(user)
 
     first_name = message.from_user.first_name.strip() if message.from_user.first_name else 'друг'
     text = (
@@ -91,17 +89,8 @@ async def start_handler(message: Message) -> None:
         'ZERO уже готов к работе.\n'
         'В мини-приложении можно активировать профиль, продлить срок действия, открыть свои материалы и проверить заявки.\n'
         'Если нужен ответ от поддержки, воспользуйтесь кнопкой создания тикета.\n\n'
-        'Для входа на сайте используйте общий доступ к кабинету:\n'
-        f'ID входа: {web_access["login_id"]}\n'
+        'Нажмите кнопку ниже, чтобы перейти в ZERO.'
     )
-    if web_access['temporary_password']:
-        text += (
-            f'Пароль: {web_access["temporary_password"]}\n'
-            'Это временный пароль для сайта. После входа его лучше поменять в личном кабинете.\n\n'
-        )
-    else:
-        text += 'Пароль для сайта уже настроен. При необходимости его можно изменить в личном кабинете.\n\n'
-    text += 'Нажмите кнопку ниже, чтобы перейти в ZERO.'
     await message.answer(text, reply_markup=mini_app_keyboard())
 
 
