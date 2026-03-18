@@ -1,4 +1,4 @@
-﻿import { CircleDollarSign, Copy, MessageCircleMore, Sparkles } from 'lucide-react';
+﻿import { CircleDollarSign, Copy, ExternalLink, MessageCircleMore, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '../components/StateCards';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
+import { openTelegramPage } from '../telegram';
 import type { PaymentIntent, PaymentSettings, Plan, SupportContact } from '../types/models';
 
 export function RenewKeyPage() {
@@ -21,6 +22,7 @@ export function RenewKeyPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [transferPhone, setTransferPhone] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -46,12 +48,20 @@ export function RenewKeyPage() {
       );
       setTransferPhone(payment.transfer_phone);
       setTransferNote(payment.transfer_note);
+      setCheckoutUrl(payment.confirmation_url);
       setMessage(
         paymentSettings.enabled
-          ? 'Заявка на продление создана. Выполните перевод и отправьте подтверждение администратору.'
+          ? 'Платёжная страница уже готова. Если она не открылась автоматически, используйте кнопку ниже.'
           : 'Заявка создана. Для оплаты продолжите общение с администратором.',
       );
       setError(null);
+      if (paymentSettings.enabled) {
+        const directCheckoutUrl = payment.confirmation_url;
+        if (!directCheckoutUrl) {
+          throw new Error('Платёжная ссылка не была получена');
+        }
+        window.setTimeout(() => openTelegramPage(directCheckoutUrl), 120);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать заявку на продление');
     }
@@ -81,15 +91,18 @@ export function RenewKeyPage() {
       {error && <ErrorState text={error} />}
       {!loading && !error && plans.length === 0 && <EmptyState title="Тарифов пока нет" text="Попробуйте открыть раздел немного позже." />}
 
-      {paymentSettings.enabled && transferPhone && (
+      {paymentSettings.enabled && checkoutUrl && (
         <article className="glass-card liquid-panel">
-          <p className="title-line">Как оплатить продление</p>
-          <p className="muted">Номер для перевода: <strong>{transferPhone}</strong></p>
-          <p className="muted">Комментарий к переводу:</p>
-          <p className="mono-block">{transferNote || 'ZERO продление'}</p>
-          <button className="btn btn-ghost" onClick={() => transferPhone && navigator.clipboard.writeText(transferPhone)}>
-            <Copy size={16} /> Скопировать номер
-          </button>
+          <p className="title-line">Оплата продления через Platega</p>
+          <p className="muted">Если платёжная страница не открылась автоматически, можно вернуться к ней по кнопке ниже.</p>
+          <div className="action-row">
+            <button className="btn btn-primary" onClick={() => checkoutUrl && openTelegramPage(checkoutUrl)}>
+              <ExternalLink size={16} /> Открыть оплату
+            </button>
+            <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(checkoutUrl || '')}>
+              <Copy size={16} /> Скопировать ссылку
+            </button>
+          </div>
         </article>
       )}
 
@@ -126,3 +139,6 @@ export function RenewKeyPage() {
     </section>
   );
 }
+
+
+

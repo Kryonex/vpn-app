@@ -1,5 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -10,21 +11,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
+from app.integrations.platega.provider import PlategaProvider
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.enums import PaymentOperation, PaymentProvider as PaymentProviderEnum, PaymentStatus, SubscriptionStatus, VPNKeyStatus
 from app.models.payment import Payment
+from app.models.payment_event import PaymentEvent
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.models.vpn_key import VPNKey
 from app.models.vpn_key_version import VPNKeyVersion
+from app.repositories.app_settings_repository import AppSettingsRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.vpn_key_repository import VPNKeyRepository
-from app.repositories.app_settings_repository import AppSettingsRepository
 from app.services.access_policy_service import AccessPolicyService
 from app.services.notification_service import NotificationService
 from app.services.referral_service import ReferralService
 from app.services.system_service import SystemStatusService
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentService:
@@ -44,6 +48,7 @@ class PaymentService:
         self.access_policy = AccessPolicyService(session)
         self.referral_service = ReferralService(session)
         self.settings = get_settings()
+        self.platega_provider = PlategaProvider()
 
     async def create_purchase_intent(
         self,
@@ -52,21 +57,19 @@ class PaymentService:
         key_name: str | None,
         apply_bonus_days: int,
     ) -> Payment:
-        payments_enabled = await SystemStatusService(self.session).payments_enabled()
-        if payments_enabled and not self.settings.payment_phone:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Payment phone is not configured')
-
         plan = await self.plan_repo.get_by_id(plan_id)
         if not plan or not plan.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Plan not found')
 
         bonus_days = await self._validate_bonus_days(user, apply_bonus_days)
+        payments_enabled = await SystemStatusService(self.session).payments_enabled()
+        payment_mode = 'direct' if payments_enabled else 'admin_contact'
         transfer_note = self._build_transfer_note(operation=PaymentOperation.PURCHASE, plan_name=plan.name)
 
         payment = Payment(
             user_id=user.id,
             plan_id=plan.id,
-            provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, used as generic provider marker
+            provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, kept for backward compatibility
             operation=PaymentOperation.PURCHASE,
             amount=plan.price,
             currency=plan.currency,
@@ -75,12 +78,19 @@ class PaymentService:
             bonus_days_applied=bonus_days,
             metadata_json={
                 'key_name': key_name or 'ZERO Access',
-                'transfer_phone': self.settings.payment_phone if payments_enabled else None,
+                'transfer_phone': None,
                 'transfer_note': transfer_note,
-                'payment_mode': 'direct' if payments_enabled else 'admin_contact',
+                'payment_mode': payment_mode,
+                'gateway': 'platega' if payments_enabled else 'admin_contact',
             },
         )
         await self.payment_repo.create(payment)
+
+        if payments_enabled:
+            await self._attach_platega_checkout(
+                payment=payment,
+                description=f'ZERO | Покупка | {plan.name}',
+            )
 
         await self.session.commit()
         await self.session.refresh(payment)
@@ -94,10 +104,6 @@ class PaymentService:
         plan_id: UUID,
         apply_bonus_days: int,
     ) -> Payment:
-        payments_enabled = await SystemStatusService(self.session).payments_enabled()
-        if payments_enabled and not self.settings.payment_phone:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Payment phone is not configured')
-
         key = await self.key_repo.get_owned_key(key_id, user.id)
         if not key:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Key not found')
@@ -107,13 +113,15 @@ class PaymentService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Plan not found')
 
         bonus_days = await self._validate_bonus_days(user, apply_bonus_days)
+        payments_enabled = await SystemStatusService(self.session).payments_enabled()
+        payment_mode = 'direct' if payments_enabled else 'admin_contact'
         transfer_note = self._build_transfer_note(operation=PaymentOperation.RENEW, plan_name=plan.name)
 
         payment = Payment(
             user_id=user.id,
             vpn_key_id=key.id,
             plan_id=plan.id,
-            provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, used as generic provider marker
+            provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, kept for backward compatibility
             operation=PaymentOperation.RENEW,
             amount=plan.price,
             currency=plan.currency,
@@ -122,12 +130,19 @@ class PaymentService:
             bonus_days_applied=bonus_days,
             metadata_json={
                 'key_name': key.display_name,
-                'transfer_phone': self.settings.payment_phone if payments_enabled else None,
+                'transfer_phone': None,
                 'transfer_note': transfer_note,
-                'payment_mode': 'direct' if payments_enabled else 'admin_contact',
+                'payment_mode': payment_mode,
+                'gateway': 'platega' if payments_enabled else 'admin_contact',
             },
         )
         await self.payment_repo.create(payment)
+
+        if payments_enabled:
+            await self._attach_platega_checkout(
+                payment=payment,
+                description=f'ZERO | Продление | {plan.name}',
+            )
 
         await self.session.commit()
         await self.session.refresh(payment)
@@ -169,6 +184,131 @@ class PaymentService:
         await self.session.commit()
         await self.session.refresh(locked_payment)
         return locked_payment
+
+    async def refresh_payment_for_user(self, payment_id: UUID, user_id: UUID) -> Payment:
+        payment = await self.payment_repo.get_by_id_for_update(payment_id)
+        if not payment or payment.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Payment not found')
+        await self._sync_external_payment(payment)
+        await self.session.commit()
+        await self.session.refresh(payment)
+        return payment
+
+    async def process_platega_webhook(self, payload: dict[str, object]) -> bool:
+        event = await self.platega_provider.parse_webhook(payload)
+        payment = await self.payment_repo.get_by_external_id(event.payment_id)
+        if not payment:
+            logger.warning('Platega webhook ignored: payment not found for external_id=%s', event.payment_id)
+            return False
+
+        locked_payment = await self.payment_repo.get_by_id_for_update(payment.id)
+        if not locked_payment:
+            logger.warning('Platega webhook ignored: locked payment missing for id=%s', payment.id)
+            return False
+
+        await self._record_payment_event(locked_payment, event.provider_event_id, event.event_type, event.raw)
+        await self._apply_provider_status(locked_payment, event.status)
+        await self.session.commit()
+        return True
+
+    async def _attach_platega_checkout(self, *, payment: Payment, description: str) -> None:
+        self._ensure_platega_ready()
+        provider_result = await self.platega_provider.create_payment(
+            amount=payment.amount,
+            currency=payment.currency,
+            description=description,
+            return_url=self._build_return_url(payment.id),
+            idempotence_key=payment.idempotence_key,
+            metadata={'payload': str(payment.id)},
+        )
+        metadata = dict(payment.metadata_json or {})
+        metadata.update(
+            {
+                'platega': provider_result.raw,
+                'payment_mode': 'direct',
+                'gateway': 'platega',
+            }
+        )
+        payment.external_payment_id = provider_result.payment_id
+        payment.confirmation_url = provider_result.confirmation_url
+        payment.metadata_json = metadata
+        payment.status = self._map_provider_status(provider_result.status)
+
+    def _ensure_platega_ready(self) -> None:
+        if not self.platega_provider.is_configured():
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Platega is not configured')
+        if not self.settings.mini_app_url:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='MINI_APP_URL is not configured')
+
+    def _build_return_url(self, payment_id: UUID) -> str:
+        base_url = self.settings.mini_app_url.rstrip('/')
+        separator = '&' if '?' in base_url else '?'
+        return f'{base_url}/buy{separator}payment_id={payment_id}'
+
+    async def _sync_external_payment(self, payment: Payment) -> None:
+        if not payment.external_payment_id:
+            return
+        provider_result = await self.platega_provider.get_payment(payment.external_payment_id)
+        metadata = dict(payment.metadata_json or {})
+        metadata['platega_status_check'] = provider_result.raw
+        payment.metadata_json = metadata
+        await self._apply_provider_status(payment, provider_result.status)
+
+    async def _apply_provider_status(self, payment: Payment, provider_status: str) -> None:
+        next_status = self._map_provider_status(provider_status)
+        now = datetime.now(timezone.utc)
+
+        if next_status == PaymentStatus.SUCCEEDED:
+            if payment.status != PaymentStatus.SUCCEEDED:
+                payment.status = PaymentStatus.SUCCEEDED
+                await self._apply_successful_payment(payment)
+                payment.succeeded_at = now
+            payment.processed_at = now
+            return
+
+        if next_status in {PaymentStatus.CANCELED, PaymentStatus.FAILED}:
+            if payment.status != PaymentStatus.SUCCEEDED:
+                payment.status = next_status
+                payment.processed_at = now
+            return
+
+        if payment.status != PaymentStatus.SUCCEEDED:
+            payment.status = next_status
+
+    def _map_provider_status(self, provider_status: str) -> PaymentStatus:
+        normalized = provider_status.strip().upper()
+        if normalized == 'CONFIRMED':
+            return PaymentStatus.SUCCEEDED
+        if normalized in {'CANCELED', 'CANCELLED'}:
+            return PaymentStatus.CANCELED
+        if normalized in {'CHARGEBACK', 'CHARGEBACKED'}:
+            return PaymentStatus.FAILED
+        if normalized in {'WAITING_FOR_CAPTURE'}:
+            return PaymentStatus.WAITING_FOR_CAPTURE
+        return PaymentStatus.PENDING
+
+    async def _record_payment_event(
+        self,
+        payment: Payment,
+        provider_event_id: str,
+        event_type: str,
+        payload: dict[str, object],
+    ) -> None:
+        exists = await self.session.scalar(
+            select(PaymentEvent.id).where(PaymentEvent.provider_event_id == provider_event_id)
+        )
+        if exists:
+            return
+        self.session.add(
+            PaymentEvent(
+                payment_id=payment.id,
+                provider=PaymentProviderEnum.YOOKASSA,  # legacy enum value in DB, kept for backward compatibility
+                provider_event_id=provider_event_id,
+                event_type=event_type,
+                payload=payload,
+            )
+        )
+        await self.session.flush()
 
     async def _apply_successful_payment(self, payment: Payment) -> None:
         user = await self.session.scalar(
@@ -364,6 +504,12 @@ class PaymentService:
         )
         operation_text = 'покупку' if payment.operation == PaymentOperation.PURCHASE else 'продление'
         transfer_note = (payment.metadata_json or {}).get('transfer_note') or '-'
+        payment_mode = (payment.metadata_json or {}).get('payment_mode')
+        mode_text = (
+            'через эквайринг Platega'
+            if payment_mode == 'direct'
+            else 'через администратора'
+        )
         text = (
             'Новый запрос на оплату\n\n'
             f'Пользователь: {user_label}\n'
@@ -371,8 +517,8 @@ class PaymentService:
             f'Тариф: {plan_name}\n'
             f'Сумма: {payment.amount} {payment.currency}\n'
             f'Платёж: {payment.id}\n'
-            f'Комментарий к переводу: {transfer_note}\n'
-            f'Режим оплаты: {"через администратора" if (payment.metadata_json or {}).get("payment_mode") == "admin_contact" else "по реквизитам"}'
+            f'Метка: {transfer_note}\n'
+            f'Режим оплаты: {mode_text}'
         )
         await self.notification_service.enqueue_telegram_notification(
             telegram_user_id=admin_telegram_id,

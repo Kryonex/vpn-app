@@ -36,6 +36,14 @@ class PaymentRepository:
         )
         return await self.session.scalar(stmt)
 
+    async def get_by_id(self, payment_id: UUID) -> Payment | None:
+        stmt = (
+            select(Payment)
+            .where(Payment.id == payment_id)
+            .options(selectinload(Payment.plan), selectinload(Payment.user), selectinload(Payment.vpn_key))
+        )
+        return await self.session.scalar(stmt)
+
     async def list_by_user(self, user_id: UUID) -> list[Payment]:
         stmt = (
             select(Payment)

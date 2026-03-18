@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, CircleDollarSign, Copy, History, MessageCircleMore, ReceiptText } from 'lucide-react';
+﻿import { CheckCircle2, CircleDollarSign, Copy, ExternalLink, History, MessageCircleMore, ReceiptText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, SkeletonCards } from '../components/StateCards'
 import { StatusBadge } from '../components/StatusBadge';
 import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
+import { openTelegramPage } from '../telegram';
 import type { Payment, PaymentIntent, PaymentSettings, Plan, SupportContact, VPNKey } from '../types/models';
 
 export function BuyPlanPage() {
@@ -22,6 +23,7 @@ export function BuyPlanPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [transferPhone, setTransferPhone] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
   const successTimerRef = useRef<number | null>(null);
 
@@ -50,6 +52,31 @@ export function BuyPlanPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentId = params.get('payment_id');
+    if (!paymentId) {
+      return;
+    }
+
+    void apiRequest<Payment>(`/payments/${paymentId}/refresh`, { method: 'POST' })
+      .then((payment) => {
+        if (payment.status === 'succeeded') {
+          setMessage('Оплата подтверждена. Профиль уже активирован и появится в разделе с доступами.');
+        } else if (payment.status === 'canceled' || payment.status === 'failed') {
+          setError('Платёж не был завершён. Можно попробовать ещё раз.');
+        }
+      })
+      .catch(() => {
+        // If the refresh endpoint is temporarily unavailable, the webhook will still finish the payment.
+      })
+      .finally(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('payment_id');
+        window.history.replaceState({}, '', url.toString());
+      });
+  }, []);
+
   const refreshPayments = async () => {
     const nextPayments = await apiRequest<Payment[]>('/payments');
     setPayments(nextPayments);
@@ -63,9 +90,10 @@ export function BuyPlanPage() {
       );
       setTransferPhone(payment.transfer_phone);
       setTransferNote(payment.transfer_note);
+      setCheckoutUrl(payment.confirmation_url);
       setMessage(
         paymentSettings.enabled
-          ? 'Заявка создана. Выполните перевод по инструкции ниже и отправьте подтверждение администратору.'
+          ? 'Платёжная страница уже готова. Если она не открылась автоматически, используйте кнопку ниже.'
           : 'Заявка создана. Напишите администратору, и он лично отправит реквизиты для оплаты.',
       );
       setShowPurchaseSuccess(true);
@@ -75,6 +103,13 @@ export function BuyPlanPage() {
       successTimerRef.current = window.setTimeout(() => setShowPurchaseSuccess(false), 2600);
       await refreshPayments();
       setError(null);
+      if (paymentSettings.enabled) {
+        const directCheckoutUrl = payment.confirmation_url;
+        if (!directCheckoutUrl) {
+          throw new Error('Платёжная ссылка не была получена');
+        }
+        window.setTimeout(() => openTelegramPage(directCheckoutUrl), 120);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать заявку');
     }
@@ -107,8 +142,8 @@ export function BuyPlanPage() {
           <p className="title-line row-inline"><ReceiptText size={16} /> Режим оплаты</p>
           <p className="muted">
             {paymentSettings.enabled
-              ? 'ZERO показывает номер для перевода и комментарий к платежу прямо в приложении.'
-              : 'Прямые реквизиты скрыты. После создания заявки ZERO переводит вас к администратору для ручного оформления оплаты.'}
+              ? 'ZERO открывает защищённую страницу оплаты Platega сразу после создания заявки.'
+              : 'Прямое оформление оплаты временно отключено. После создания заявки ZERO переводит вас к администратору для ручного оформления.'}
           </p>
         </div>
         {!paymentSettings.enabled && support?.telegram_link && (
@@ -127,28 +162,26 @@ export function BuyPlanPage() {
           <p className="title-line">Заявка создана</p>
           <p className="muted">
             {paymentSettings.enabled
-              ? 'Мы уже подготовили данные для перевода. После подтверждения оплаты профиль появится в разделе с профилями.'
+              ? 'Мы уже подготовили платёжную страницу. После подтверждения оплаты профиль появится в разделе с доступами.'
               : 'Теперь откройте чат с администратором. Он отправит реквизиты и проведёт вас дальше вручную.'}
           </p>
         </article>
       )}
 
-      {paymentSettings.enabled && transferPhone && (
+      {paymentSettings.enabled && checkoutUrl && (
         <article className="glass-card buy-instructions-card liquid-panel">
-          <p className="title-line row-inline"><ReceiptText size={16} /> Как оплатить заявку</p>
+          <p className="title-line row-inline"><ReceiptText size={16} /> Оплата через Platega</p>
           <div className="stack compact-stack">
-            <div className="hint-row"><span className="step-badge">1</span><span>Переведите оплату на номер <strong>{transferPhone}</strong>.</span></div>
-            <div className="hint-row"><span className="step-badge">2</span><span>Укажите комментарий к переводу, чтобы администратор быстро нашёл заявку.</span></div>
-            <div className="hint-row"><span className="step-badge">3</span><span>После перевода отправьте чек администратору. Он подтвердит оплату и активирует профиль.</span></div>
+            <div className="hint-row"><span className="step-badge">1</span><span>Откройте защищённую страницу оплаты.</span></div>
+            <div className="hint-row"><span className="step-badge">2</span><span>Завершите платёж в окне Platega.</span></div>
+            <div className="hint-row"><span className="step-badge">3</span><span>После подтверждения оплаты профиль активируется автоматически.</span></div>
           </div>
-          <p className="muted">Комментарий к переводу</p>
-          <p className="mono-block">{transferNote || 'ZERO заявка'}</p>
           <div className="action-row">
-            <button className="btn btn-primary" onClick={() => transferPhone && navigator.clipboard.writeText(transferPhone)}>
-              <Copy size={16} /> Скопировать номер
+            <button className="btn btn-primary" onClick={() => checkoutUrl && openTelegramPage(checkoutUrl)}>
+              <ExternalLink size={16} /> Открыть оплату
             </button>
-            <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(transferNote || 'ZERO заявка')}>
-              <Copy size={16} /> Скопировать комментарий
+            <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(checkoutUrl || '')}>
+              <Copy size={16} /> Скопировать ссылку
             </button>
           </div>
         </article>
@@ -267,3 +300,6 @@ export function BuyPlanPage() {
     </section>
   );
 }
+
+
+

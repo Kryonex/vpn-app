@@ -493,12 +493,12 @@ export function AdminPage() {
           })}><Wrench size={16} /> Сохранить статус</button>
         </FoldableSection>
 
-        <FoldableSection title="Платежи ZERO" subtitle="Управление выдачей реквизитов внутри мини-приложения" icon={<Wallet size={16} />} defaultOpen={false}>
+        <FoldableSection title="Платежи ZERO" subtitle="Управление checkout-оплатой внутри мини-приложения" icon={<Wallet size={16} />} defaultOpen={false}>
           <div className="admin-note">
-            Когда прямые платежи выключены, ZERO не показывает номер для перевода. Пользователь создаёт заявку и продолжает оплату через администратора.
+            Когда прямые платежи включены, ZERO открывает checkout Platega сразу после создания заявки. Если режим выключен, пользователь создаёт заявку и продолжает оплату через администратора.
           </div>
           <div className="toggle-list">
-            <label className="toggle-row"><input type="checkbox" checked={paymentSettings.enabled} onChange={(e) => setPaymentSettings((prev) => ({ ...prev, enabled: e.target.checked }))} /><span>{paymentSettings.enabled ? 'Прямые платежи включены' : 'Оплата через администратора'}</span></label>
+            <label className="toggle-row"><input type="checkbox" checked={paymentSettings.enabled} onChange={(e) => setPaymentSettings((prev) => ({ ...prev, enabled: e.target.checked }))} /><span>{paymentSettings.enabled ? 'Оплата через Platega включена' : 'Оплата через администратора'}</span></label>
           </div>
           <button className="btn btn-primary" onClick={() => void run(async () => {
             const updated = await apiRequest<PaymentSettingsState>('/admin/system/payments', {
@@ -506,7 +506,7 @@ export function AdminPage() {
               body: JSON.stringify({ enabled: paymentSettings.enabled }),
             });
             setPaymentSettings(updated);
-            await afterAction(updated.enabled ? 'Прямые реквизиты снова доступны пользователям.' : 'Прямые платежи выключены. Теперь заявки ведут пользователей к администратору.');
+            await afterAction(updated.enabled ? 'Checkout Platega снова доступен пользователям.' : 'Checkout отключён. Теперь заявки ведут пользователей к администратору.');
           })}><Wallet size={16} /> Сохранить режим оплаты</button>
         </FoldableSection>
 
@@ -918,5 +918,6 @@ export function AdminPage() {
     </section>
   );
 }
+
 
 

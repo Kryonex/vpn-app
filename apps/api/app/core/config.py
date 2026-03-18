@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     admin_bearer_token: str = Field(default='change_me_admin_token', alias='ADMIN_BEARER_TOKEN')
     telegram_admin_id: int | None = Field(default=None, alias='TELEGRAM_ADMIN_ID')
     payment_phone: str = Field(default='', alias='PAYMENT_PHONE')
+    platega_base_url: str = Field(default='https://app.platega.io', alias='PLATEGA_BASE_URL')
+    platega_merchant_id: str = Field(default='', alias='PLATEGA_MERCHANT_ID')
+    platega_secret: str = Field(default='', alias='PLATEGA_SECRET')
+    platega_payment_method: int = Field(default=2, alias='PLATEGA_PAYMENT_METHOD')
 
     database_url: str = Field(default='postgresql+asyncpg://vpn:vpn@postgres:5432/vpn', alias='DATABASE_URL')
     redis_url: str = Field(default='redis://redis:6379/0', alias='REDIS_URL')
