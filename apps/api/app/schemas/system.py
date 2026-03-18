@@ -125,6 +125,12 @@ class UserTelegramProxyOut(BaseModel):
     proxies: list[TelegramProxyItemOut] = Field(default_factory=list)
 
 
+class PublicTelegramAccessOut(BaseModel):
+    enabled: bool = False
+    bot_url: str | None = None
+    proxies: list[TelegramProxyItemOut] = Field(default_factory=list)
+
+
 class NewsItemOut(BaseModel):
     id: str
     title: str

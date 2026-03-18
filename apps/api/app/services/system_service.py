@@ -247,6 +247,16 @@ class SystemStatusService:
             'proxies': proxies,
         }
 
+    async def get_public_telegram_access(self) -> dict[str, object]:
+        proxies = [item for item in await self.get_telegram_proxies() if item.get('enabled') and item.get('proxy_url')]
+        bot_username = (self.settings.bot_username or '').strip().lstrip('@')
+        bot_url = f'https://t.me/{bot_username}' if bot_username else None
+        return {
+            'enabled': bool(proxies and bot_url),
+            'bot_url': bot_url,
+            'proxies': proxies,
+        }
+
     async def get_user_backup_access(self, user: User) -> dict[str, object]:
         state = await self.get_status()
         if state.status != 'server_unavailable':

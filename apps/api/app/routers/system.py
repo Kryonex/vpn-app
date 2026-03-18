@@ -13,6 +13,7 @@ from app.schemas.system import (
     FreeTrialActivateResponse,
     FreeTrialStatusOut,
     PaymentSettingsOut,
+    PublicTelegramAccessOut,
     SystemNewsListOut,
     SystemStatusOut,
     UserTelegramProxyOut,
@@ -21,6 +22,14 @@ from app.services.auth_service import AuthService
 from app.services.system_service import SystemStatusService
 
 router = APIRouter(prefix='/system', tags=['system'])
+
+
+@router.get('/public-telegram-access', response_model=PublicTelegramAccessOut)
+async def get_public_telegram_access(
+    session: AsyncSession = Depends(get_session),
+) -> PublicTelegramAccessOut:
+    data = await SystemStatusService(session).get_public_telegram_access()
+    return PublicTelegramAccessOut(**data)
 
 
 @router.get('/status', response_model=SystemStatusOut)
