@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +46,6 @@ async def refresh_payment(
 @router.post('/platega/webhook')
 async def platega_webhook(
     payload: dict = Body(default={}),
-    response: Response | None = None,
     x_merchant_id: str | None = Header(default=None, alias='X-MerchantId'),
     x_secret: str | None = Header(default=None, alias='X-Secret'),
     session: AsyncSession = Depends(get_session),
@@ -65,8 +64,6 @@ async def platega_webhook(
         notification_service=NotificationService(redis),
     )
     processed = await service.process_platega_webhook(payload)
-    if response is not None:
-        response.headers['Cache-Control'] = 'no-store'
     return {'ok': True, 'processed': processed}
 
 
