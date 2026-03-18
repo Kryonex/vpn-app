@@ -41,6 +41,8 @@ from app.schemas.admin import (
     AdminUserOut,
 )
 from app.schemas.system import (
+    BackupAccessSettingsOut,
+    BackupAccessSettingsUpdateRequest,
     AdminInboundOut,
     AdminMessageSendRequest,
     AdminMessageSendResponse,
@@ -355,6 +357,27 @@ async def admin_update_payment_settings(
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     return PaymentSettingsOut(**data)
+
+
+@router.get('/system/backup-access', response_model=BackupAccessSettingsOut)
+async def admin_get_backup_access_settings(
+    session: AsyncSession = Depends(get_session),
+):
+    return BackupAccessSettingsOut(**await SystemStatusService(session).get_backup_access_settings())
+
+
+@router.patch('/system/backup-access', response_model=BackupAccessSettingsOut)
+async def admin_update_backup_access_settings(
+    payload: BackupAccessSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    data = await SystemStatusService(session).set_backup_access_settings(
+        url=payload.url,
+        button_text=payload.button_text,
+        message=payload.message,
+    )
+    await session.commit()
+    return BackupAccessSettingsOut(**data)
 
 
 @router.get('/system/telegram-proxy', response_model=TelegramProxySettingsOut)

@@ -84,6 +84,13 @@ export type PaymentSettings = {
   mode: 'direct' | 'admin_contact' | string;
 };
 
+export type BackupAccessSettings = {
+  enabled: boolean;
+  url: string | null;
+  button_text: string;
+  message: string | null;
+};
+
 export type ReferralMe = {
   referral_code: string;
   referral_link: string;

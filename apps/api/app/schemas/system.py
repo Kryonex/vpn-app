@@ -77,6 +77,19 @@ class PaymentSettingsUpdateRequest(BaseModel):
     enabled: bool = True
 
 
+class BackupAccessSettingsOut(BaseModel):
+    enabled: bool = False
+    url: str | None = None
+    button_text: str = 'Открыть резервный доступ'
+    message: str | None = None
+
+
+class BackupAccessSettingsUpdateRequest(BaseModel):
+    url: str | None = Field(default=None, max_length=2048)
+    button_text: str = Field(default='Открыть резервный доступ', max_length=64)
+    message: str | None = Field(default=None, max_length=500)
+
+
 class TelegramProxyItemOut(BaseModel):
     id: str
     country: str

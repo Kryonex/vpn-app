@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_access_token, validate_telegram_init_data
+from app.core.security import create_access_token, validate_telegram_init_data, validate_telegram_login_data
 from app.integrations.threexui.service import ThreeXUIService
 from app.models.audit_log import AuditLog
 from app.models.enums import SubscriptionStatus, VPNKeyStatus
@@ -34,34 +34,14 @@ class AuthService:
 
     async def authenticate_telegram(self, init_data: str, bot_token: str) -> tuple[User, str]:
         validated = validate_telegram_init_data(init_data, bot_token)
-        tg_user = validated['user']
+        user = await self._authenticate_telegram_user(validated['user'], validated.get('start_param'))
 
-        telegram_user_id = int(tg_user['id'])
-        user = await self.user_repo.get_by_telegram_id(telegram_user_id)
-        username = (tg_user.get('username') or '').strip().lower() or None
+        token = create_access_token(str(user.id))
+        return user, token
 
-        # If user was pre-bound by username before first login, reuse that local account.
-        if not user and username:
-            user = await self.user_repo.get_by_telegram_username(username)
-        if not user:
-            user = await self.user_repo.create_user()
-
-        await self.user_repo.upsert_telegram_account(
-            user=user,
-            telegram_user_id=telegram_user_id,
-            username=username,
-            first_name=tg_user.get('first_name'),
-            last_name=tg_user.get('last_name'),
-            language_code=tg_user.get('language_code'),
-            is_bot=bool(tg_user.get('is_bot', False)),
-        )
-
-        await self.referral_service.link_referred_user(user, validated.get('start_param'))
-        await self._import_panel_keys_for_username_if_needed(user=user, username=username)
-
-        await self.session.commit()
-        await self.session.refresh(user)
-
+    async def authenticate_telegram_website(self, auth_data: dict[str, Any], bot_token: str) -> tuple[User, str]:
+        validated = validate_telegram_login_data(auth_data, bot_token)
+        user = await self._authenticate_telegram_user(validated['user'], None)
         token = create_access_token(str(user.id))
         return user, token
 
@@ -88,6 +68,33 @@ class AuthService:
             is_bot=False,
         )
         await self.referral_service.link_referred_user(user, referral_code)
+
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
+    async def _authenticate_telegram_user(self, tg_user: dict[str, Any], start_param: str | None) -> User:
+        telegram_user_id = int(tg_user['id'])
+        user = await self.user_repo.get_by_telegram_id(telegram_user_id)
+        username = (tg_user.get('username') or '').strip().lower() or None
+
+        if not user and username:
+            user = await self.user_repo.get_by_telegram_username(username)
+        if not user:
+            user = await self.user_repo.create_user()
+
+        await self.user_repo.upsert_telegram_account(
+            user=user,
+            telegram_user_id=telegram_user_id,
+            username=username,
+            first_name=tg_user.get('first_name'),
+            last_name=tg_user.get('last_name'),
+            language_code=tg_user.get('language_code'),
+            is_bot=bool(tg_user.get('is_bot', False)),
+        )
+
+        await self.referral_service.link_referred_user(user, start_param)
+        await self._import_panel_keys_for_username_if_needed(user=user, username=username)
 
         await self.session.commit()
         await self.session.refresh(user)

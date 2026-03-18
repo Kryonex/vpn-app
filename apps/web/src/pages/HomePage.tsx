@@ -11,6 +11,7 @@ import { SystemStatusBanner } from '../components/SystemStatusBanner';
 import { useAuth } from '../context/AuthContext';
 import { openTelegramPage } from '../telegram';
 import type {
+  BackupAccessSettings,
   FreeTrialActivateResponse,
   FreeTrialStatus,
   ReferralMe,
@@ -54,6 +55,7 @@ export function HomePage() {
   const [support, setSupport] = useState<SupportContact | null>(null);
   const [news, setNews] = useState<SystemNewsList['items']>([]);
   const [trialStatus, setTrialStatus] = useState<FreeTrialStatus | null>(null);
+  const [backupAccess, setBackupAccess] = useState<BackupAccessSettings | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [metricInfo, setMetricInfo] = useState<'keys' | 'bonus' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -67,6 +69,7 @@ export function HomePage() {
     apiRequest<SupportContact>('/support').then(setSupport).catch(() => null);
     apiRequest<SystemNewsList>('/system/news').then((data) => setNews(data.items)).catch(() => null);
     apiRequest<FreeTrialStatus>('/system/free-trial').then(setTrialStatus).catch(() => null);
+    apiRequest<BackupAccessSettings>('/system/backup-access').then(setBackupAccess).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -292,6 +295,20 @@ export function HomePage() {
         <article className="glass-card liquid-panel">
           <p className="title-line">Сервис временно ограничен</p>
           <p className="muted">Во время технических работ активация и управление доступом могут быть временно недоступны.</p>
+        </article>
+      )}
+
+      {systemStatus?.status === 'server_unavailable' && backupAccess?.enabled && backupAccess.url && (
+        <article className="glass-card liquid-panel">
+          <p className="title-line">Резервное подключение</p>
+          <p className="muted">
+            {backupAccess.message || 'Основной сервер сейчас недоступен. Используйте резервную ссылку, чтобы продолжить работу без ожидания.'}
+          </p>
+          <div className="action-row">
+            <a className="btn btn-primary" href={backupAccess.url} target="_blank" rel="noreferrer">
+              <KeyRound size={16} /> {backupAccess.button_text}
+            </a>
+          </div>
         </article>
       )}
 

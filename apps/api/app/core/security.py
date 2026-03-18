@@ -131,6 +131,56 @@ def validate_telegram_init_data(init_data: str, bot_token: str, max_age_seconds:
     }
 
 
+def validate_telegram_login_data(auth_data: dict[str, Any], bot_token: str, max_age_seconds: int = 86400) -> dict[str, Any]:
+    if not bot_token or not bot_token.strip():
+        logger.warning('Telegram login validation failed: BOT_TOKEN missing')
+        raise TelegramAuthError('Server BOT_TOKEN is not configured')
+
+    payload = {key: value for key, value in auth_data.items() if value is not None}
+    provided_hash = str(payload.pop('hash', '')).strip()
+    if not provided_hash:
+        raise TelegramAuthError('Missing hash in Telegram login payload')
+
+    auth_date_raw = payload.get('auth_date')
+    if auth_date_raw in (None, ''):
+        raise TelegramAuthError('Missing auth_date in Telegram login payload')
+
+    try:
+        auth_date_value = int(auth_date_raw)
+    except (TypeError, ValueError) as exc:
+        raise TelegramAuthError('Invalid auth_date in Telegram login payload') from exc
+
+    auth_date = datetime.fromtimestamp(auth_date_value, tz=timezone.utc)
+    if datetime.now(timezone.utc) - auth_date > timedelta(seconds=max_age_seconds):
+        raise TelegramAuthError('Telegram login data is too old')
+
+    data_check_string = '\n'.join(
+        f'{key}={payload[key]}'
+        for key in sorted(payload.keys())
+        if payload[key] not in (None, '')
+    )
+    secret_key = hashlib.sha256(bot_token.encode('utf-8')).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode('utf-8'), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected_hash, provided_hash):
+        raise TelegramAuthError('Invalid Telegram login signature')
+
+    telegram_user_id = payload.get('id')
+    if telegram_user_id in (None, ''):
+        raise TelegramAuthError('Missing Telegram user id')
+
+    return {
+        'user': {
+            'id': int(telegram_user_id),
+            'username': payload.get('username'),
+            'first_name': payload.get('first_name'),
+            'last_name': payload.get('last_name'),
+            'photo_url': payload.get('photo_url'),
+        },
+        'auth_date': auth_date,
+        'raw': {**payload, 'hash': provided_hash},
+    }
+
+
 def create_access_token(subject: str) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)

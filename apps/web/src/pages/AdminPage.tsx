@@ -9,7 +9,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, SkeletonCards } from '../components/StateCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
-import type { NewsItem, Payment, PaymentSettings, Plan, SystemStatus, TelegramProxyItem, VPNKey } from '../types/models';
+import type { BackupAccessSettings, NewsItem, Payment, PaymentSettings, Plan, SystemStatus, TelegramProxyItem, VPNKey } from '../types/models';
 
 type AdminStats = { total_payments: number; succeeded_payments: number; pending_payments: number; failed_payments: number; total_revenue: string; month_revenue: string };
 type AdminUser = {
@@ -107,6 +107,7 @@ export function AdminPage() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [notificationQueue, setNotificationQueue] = useState<NotificationQueueStatus | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettingsState>({ enabled: true, mode: 'direct' });
+  const [backupAccess, setBackupAccess] = useState<BackupAccessSettings>({ enabled: false, url: null, button_text: 'Открыть резервный доступ', message: null });
   const [telegramProxy, setTelegramProxy] = useState<TelegramProxySettings>({ proxy_url: null, button_text: 'Открыть вариант', enabled: false, proxies: [] });
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [availableInbounds, setAvailableInbounds] = useState<AdminInbound[]>([]);
@@ -161,6 +162,7 @@ export function AdminPage() {
       { name: 'system_status', run: () => apiRequest<SystemStatus>('/admin/system/status') },
       { name: 'notification_queue', run: () => apiRequest<NotificationQueueStatus>('/admin/system/notification-queue') },
       { name: 'payment_settings', run: () => apiRequest<PaymentSettingsState>('/admin/system/payments') },
+      { name: 'backup_access', run: () => apiRequest<BackupAccessSettings>('/admin/system/backup-access') },
       { name: 'telegram_proxy', run: () => apiRequest<TelegramProxySettings>('/admin/system/telegram-proxy') },
       { name: 'system_news', run: () => apiRequest<{ items: NewsItem[] }>('/system/news') },
       { name: 'inbounds', run: () => apiRequest<AdminInbound[]>('/admin/system/inbounds') },
@@ -235,6 +237,9 @@ export function AdminPage() {
             break;
           case 'payment_settings':
             setPaymentSettings(result.value as PaymentSettingsState);
+            break;
+          case 'backup_access':
+            setBackupAccess(result.value as BackupAccessSettings);
             break;
           case 'telegram_proxy':
             {
@@ -503,6 +508,48 @@ export function AdminPage() {
             setPaymentSettings(updated);
             await afterAction(updated.enabled ? 'Прямые реквизиты снова доступны пользователям.' : 'Прямые платежи выключены. Теперь заявки ведут пользователей к администратору.');
           })}><Wallet size={16} /> Сохранить режим оплаты</button>
+        </FoldableSection>
+
+        <FoldableSection title="Резервное подключение" subtitle="Ссылка для личного кабинета при статусе «Сервер недоступен»" icon={<KeyRound size={16} />} defaultOpen={false}>
+          <label className="field">
+            <span className="field-label">Служебная ссылка</span>
+            <input className="input" type="password" value={backupAccess.url ?? ''} onChange={(e) => setBackupAccess((prev: BackupAccessSettings) => ({ ...prev, url: e.target.value }))} placeholder="https://..." />
+          </label>
+          <div className="input-grid">
+            <label className="field">
+              <span className="field-label">Текст кнопки</span>
+              <input className="input" value={backupAccess.button_text} onChange={(e) => setBackupAccess((prev: BackupAccessSettings) => ({ ...prev, button_text: e.target.value }))} placeholder="Открыть резервный доступ" />
+            </label>
+            <label className="field">
+              <span className="field-label">Сообщение</span>
+              <input className="input" value={backupAccess.message ?? ''} onChange={(e) => setBackupAccess((prev: BackupAccessSettings) => ({ ...prev, message: e.target.value }))} placeholder="Сообщение для личного кабинета" />
+            </label>
+          </div>
+          <div className="input-grid">
+            <button className="btn btn-primary" onClick={() => void run(async () => {
+              const updated = await apiRequest<BackupAccessSettings>('/admin/system/backup-access', {
+                method: 'PATCH',
+                body: JSON.stringify({
+                  url: backupAccess.url?.trim() || null,
+                  button_text: backupAccess.button_text.trim() || 'Открыть резервный доступ',
+                  message: backupAccess.message?.trim() || null,
+                }),
+              });
+              setBackupAccess(updated);
+              await afterAction('Настройки резервного подключения сохранены.');
+            })}><KeyRound size={16} /> Сохранить ссылку</button>
+            <button className="btn btn-danger-soft" onClick={() => void run(async () => {
+              const updated = await apiRequest<BackupAccessSettings>('/admin/system/backup-access', {
+                method: 'PATCH',
+                body: JSON.stringify({ url: null, button_text: 'Открыть резервный доступ', message: null }),
+              });
+              setBackupAccess(updated);
+              await afterAction('Резервное подключение отключено.');
+            })}><Trash2 size={16} /> Отключить</button>
+          </div>
+          <div className="admin-note">
+            Ссылка появляется только у пользователей с активным профилем и только когда статус системы переключён на «Сервер недоступен».
+          </div>
         </FoldableSection>
 
         <FoldableSection title="Рассылка" subtitle="Сообщения пользователям и очередь уведомлений" icon={<Send size={16} />}>

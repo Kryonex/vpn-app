@@ -9,6 +9,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.system import (
+    BackupAccessSettingsOut,
     FreeTrialActivateResponse,
     FreeTrialStatusOut,
     PaymentSettingsOut,
@@ -67,6 +68,15 @@ async def get_free_trial_status(
 ) -> FreeTrialStatusOut:
     data = await AuthService(session).get_free_trial_status(current_user)
     return FreeTrialStatusOut(**data)
+
+
+@router.get('/backup-access', response_model=BackupAccessSettingsOut)
+async def get_backup_access(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> BackupAccessSettingsOut:
+    data = await SystemStatusService(session).get_user_backup_access(current_user)
+    return BackupAccessSettingsOut(**data)
 
 
 @router.post('/free-trial/activate', response_model=FreeTrialActivateResponse)

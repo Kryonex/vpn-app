@@ -2153,3 +2153,48 @@ textarea.input {
 .plan-card-flat .muted {
   text-shadow: none;
 }
+
+.browser-auth-card {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.browser-auth-widget {
+  display: grid;
+  justify-items: center;
+  min-height: 52px;
+}
+
+.browser-auth-error {
+  margin: 0;
+  color: #ffb3b3;
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.browser-cover-actions {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 420px);
+}
+
+.browser-cover-note {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.45;
+  text-align: left;
+}

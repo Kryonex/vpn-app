@@ -33,6 +33,7 @@ class SystemStatusState:
 
 class SystemStatusService:
     STATUS_KEY = 'system_status'
+    BACKUP_ACCESS_KEY = 'backup_access_link'
     TELEGRAM_PROXY_URL_KEY = 'telegram_proxy_url'
     TELEGRAM_PROXY_BUTTON_TEXT_KEY = 'telegram_proxy_button_text'
     TELEGRAM_PROXIES_KEY = 'telegram_proxies'
@@ -98,6 +99,60 @@ class SystemStatusService:
         return {
             'enabled': enabled,
             'mode': 'direct' if enabled else 'admin_contact',
+        }
+
+    async def get_backup_access_settings(self) -> dict[str, object]:
+        setting = await self.repo.get(self.BACKUP_ACCESS_KEY)
+        if not setting or not setting.value.strip():
+            return {
+                'enabled': False,
+                'url': None,
+                'button_text': 'Открыть резервный доступ',
+                'message': None,
+            }
+
+        try:
+            payload = json.loads(setting.value)
+        except json.JSONDecodeError:
+            return {
+                'enabled': False,
+                'url': None,
+                'button_text': 'Открыть резервный доступ',
+                'message': None,
+            }
+
+        url = str(payload.get('url') or '').strip() or None
+        button_text = str(payload.get('button_text') or '').strip() or 'Открыть резервный доступ'
+        message = str(payload.get('message') or '').strip() or None
+        return {
+            'enabled': bool(url),
+            'url': url,
+            'button_text': button_text,
+            'message': message,
+        }
+
+    async def set_backup_access_settings(
+        self,
+        *,
+        url: str | None,
+        button_text: str | None,
+        message: str | None,
+    ) -> dict[str, object]:
+        normalized_url = (url or '').strip() or None
+        normalized_button_text = (button_text or '').strip() or 'Открыть резервный доступ'
+        normalized_message = (message or '').strip() or None
+        payload = {
+            'url': normalized_url,
+            'button_text': normalized_button_text,
+            'message': normalized_message,
+        }
+        await self.repo.set(self.BACKUP_ACCESS_KEY, json.dumps(payload, ensure_ascii=False))
+        await self.session.flush()
+        return {
+            'enabled': bool(normalized_url),
+            'url': normalized_url,
+            'button_text': normalized_button_text,
+            'message': normalized_message,
         }
 
     async def set_payment_settings(self, *, enabled: bool) -> dict[str, object]:
@@ -191,6 +246,37 @@ class SystemStatusService:
             'button_text': str(primary.get('button_text') or 'Подключить прокси') if primary else 'Подключить прокси',
             'proxies': proxies,
         }
+
+    async def get_user_backup_access(self, user: User) -> dict[str, object]:
+        state = await self.get_status()
+        if state.status != 'server_unavailable':
+            return {
+                'enabled': False,
+                'url': None,
+                'button_text': 'Открыть резервный доступ',
+                'message': None,
+            }
+
+        active_keys_count = int(
+            (
+                await self.session.scalar(
+                    select(func.count(VPNKey.id)).where(
+                        VPNKey.owner_id == user.id,
+                        VPNKey.status == VPNKeyStatus.ACTIVE,
+                    )
+                )
+            )
+            or 0
+        )
+        if active_keys_count <= 0:
+            return {
+                'enabled': False,
+                'url': None,
+                'button_text': 'Открыть резервный доступ',
+                'message': None,
+            }
+
+        return await self.get_backup_access_settings()
 
     async def get_news(self) -> list[dict[str, object]]:
         setting = await self.repo.get(self.NEWS_KEY)

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiRequest, clearAccessToken, getAccessToken, setAccessToken, toJsonBody } from '../api/client';
 import { initTelegramSDK, type TGUser, waitForTelegramWebApp } from '../telegram';
@@ -74,21 +74,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let token = getAccessToken();
         if (!token) {
           const rawInitData = window.Telegram?.WebApp?.initData || webApp?.initData || '';
-          const initData = rawInitData || import.meta.env.VITE_DEV_INIT_DATA || '';
+          const devInitData = import.meta.env.VITE_DEV_INIT_DATA || '';
+          const initData = rawInitData || devInitData || '';
           console.info('[auth] initData source', {
             fromTelegram: Boolean(rawInitData),
-            fromDevFallback: Boolean(!rawInitData && import.meta.env.VITE_DEV_INIT_DATA),
+            fromDevFallback: Boolean(!rawInitData && devInitData),
           });
 
           if (!initData) {
+            console.info('[auth] external browser mode enabled');
             setIsExternalBrowser(true);
-            throw new Error('Отсутствует Telegram initData. Откройте приложение через Telegram.');
+            setError(null);
+            return;
           }
 
-          const auth = await apiRequest<{ access_token: string }>(
-            '/auth/telegram',
-            toJsonBody({ init_data: initData }),
-          );
+          const auth = await apiRequest<{ access_token: string }>('/auth/telegram', toJsonBody({ init_data: initData }));
           console.info('[auth] access token received', {
             received: Boolean(auth.access_token),
           });
@@ -106,6 +106,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(null);
       } catch (err) {
         clearAccessToken();
+        const hasTelegramInitData = Boolean(window.Telegram?.WebApp?.initData);
+        const hasDevFallback = Boolean(import.meta.env.VITE_DEV_INIT_DATA);
+        setIsExternalBrowser(!hasTelegramInitData && !hasDevFallback);
         const message = err instanceof Error ? err.message : 'Ошибка авторизации';
         setError(message);
       } finally {
