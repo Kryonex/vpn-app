@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import base64
@@ -6,7 +6,10 @@ import json
 import logging
 from urllib.parse import urljoin
 
+from aiohttp import ClientError, ClientTimeout
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import CommandStart
 from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
@@ -19,6 +22,37 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 settings = get_settings()
+
+TELEGRAM_STARTUP_INITIAL_DELAY = 2
+TELEGRAM_STARTUP_MAX_DELAY = 60
+TELEGRAM_CLIENT_TIMEOUT = ClientTimeout(total=120, connect=30, sock_connect=30, sock_read=90)
+
+
+class ResilientAiohttpSession(AiohttpSession):
+    def __init__(self, timeout: ClientTimeout, **kwargs: object) -> None:
+        safe_timeout = timeout.total if timeout.total is not None else 60
+        super().__init__(timeout=safe_timeout, **kwargs)
+        self._client_timeout = timeout
+
+    async def make_request(self, bot: Bot, method: object, timeout: int | None = None) -> object:
+        session = await self.create_session()
+
+        url = self.api.api_url(token=bot.token, method=method.__api_method__)
+        form = self.build_form_data(bot=bot, method=method)
+        request_timeout = self._client_timeout if timeout is None else timeout
+
+        try:
+            async with session.post(url, data=form, timeout=request_timeout) as resp:
+                raw_result = await resp.text()
+        except asyncio.TimeoutError as exc:
+            raise TelegramNetworkError(method=method, message="Request timeout error") from exc
+        except ClientError as exc:
+            raise TelegramNetworkError(method=method, message=f"{type(exc).__name__}: {exc}") from exc
+
+        response = self.check_response(
+            bot=bot, method=method, status_code=resp.status, content=raw_result
+        )
+        return response.result
 
 
 def extract_referral_code(message: Message) -> str | None:
@@ -145,6 +179,44 @@ async def notification_worker(bot: Bot, stop_event: asyncio.Event) -> None:
             logger.exception('Notification worker error: %s', exc)
 
 
+async def wait_for_telegram(bot: Bot) -> None:
+    retry_delay = TELEGRAM_STARTUP_INITIAL_DELAY
+
+    while True:
+        try:
+            bot_user = await bot.me()
+            logger.info('Connected to Telegram Bot API as @%s', bot_user.username)
+            return
+        except TelegramNetworkError as exc:
+            logger.warning(
+                'Telegram API temporarily unavailable, retrying in %s seconds: %s',
+                retry_delay,
+                exc,
+            )
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, TELEGRAM_STARTUP_MAX_DELAY)
+
+
+async def run_polling_forever(dp: Dispatcher, bot: Bot) -> None:
+    retry_delay = TELEGRAM_STARTUP_INITIAL_DELAY
+
+    while True:
+        await wait_for_telegram(bot)
+        logger.info('Polling started successfully')
+
+        try:
+            await dp.start_polling(bot)
+            return
+        except TelegramNetworkError as exc:
+            logger.warning(
+                'Telegram API temporarily unavailable, retrying in %s seconds: %s',
+                retry_delay,
+                exc,
+            )
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, TELEGRAM_STARTUP_MAX_DELAY)
+
+
 async def main() -> None:
     if not settings.bot_token:
         raise RuntimeError(
@@ -153,7 +225,8 @@ async def main() -> None:
     if not settings.mini_app_url:
         logger.warning('MINI_APP_URL не задан. Команда /start будет работать без кнопки WebApp.')
 
-    bot = Bot(token=settings.bot_token)
+    session = ResilientAiohttpSession(timeout=TELEGRAM_CLIENT_TIMEOUT)
+    bot = Bot(token=settings.bot_token, session=session)
     dp = Dispatcher()
     dp.message.register(start_handler, CommandStart())
 
@@ -161,7 +234,7 @@ async def main() -> None:
     notify_task = asyncio.create_task(notification_worker(bot, stop_event))
 
     try:
-        await dp.start_polling(bot)
+        await run_polling_forever(dp, bot)
     finally:
         stop_event.set()
         await notify_task
