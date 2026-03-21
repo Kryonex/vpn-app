@@ -8,7 +8,7 @@
       POSTGRES_USER: ${POSTGRES_USER:-vpn}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vpn}
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@
     container_name: vpn-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "16379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -43,7 +43,7 @@
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://vpn:vpn@postgres:5432/vpn}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
-      - "8000:8000"
+      - "18000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,9 +96,9 @@
     env_file:
       - .env
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:18000}
     ports:
-      - "5173:5173"
+      - "15173:5173"
     depends_on:
       api:
         condition: service_healthy
