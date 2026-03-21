@@ -47,7 +47,7 @@ function resolveApiBase(): string {
     return `${trimTrailingSlashes(window.location.origin)}/api`;
   }
 
-  return 'http://localhost:8000';
+  return 'http://localhost:18000';
 }
 
 const API_BASE = resolveApiBase();

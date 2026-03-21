@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(default='redis://redis:6379/0', alias='REDIS_URL')
     notification_queue_key: str = Field(default='notifications:telegram', alias='NOTIFICATION_QUEUE_KEY')
 
-    cors_origins_raw: str = Field(default='http://localhost:5173', alias='CORS_ORIGINS')
+    cors_origins_raw: str = Field(default='http://localhost:15173', alias='CORS_ORIGINS')
 
     rate_limit_requests: int = Field(default=30, alias='RATE_LIMIT_REQUESTS')
     rate_limit_window_seconds: int = Field(default=60, alias='RATE_LIMIT_WINDOW_SECONDS')
