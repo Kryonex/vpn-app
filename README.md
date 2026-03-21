@@ -70,10 +70,10 @@ docker compose up -d --build
 ```
 
 Services:
-- API: `http://localhost:8000`
-- Web (Vite): `http://localhost:5173`
-- Postgres: `localhost:5432`
-- Redis: `localhost:6379`
+- API: `http://localhost:18000`
+- Web (Vite): `http://localhost:15173`
+- Postgres: `localhost:15432`
+- Redis: `localhost:16379`
 
 ## Migrations and seed
 API container runs these on startup:
@@ -166,10 +166,10 @@ docker compose logs -f bot
 ```
 
 ### API or web not reachable from VPS
-- Open ports in firewall/security group: `8000/tcp`, `5173/tcp`.
+- Open ports in firewall/security group: `18000/tcp`, `15173/tcp`.
 - Check listening sockets:
 ```bash
-ss -ltnp | grep -E '8000|5173'
+ss -ltnp | grep -E '18000|15173'
 ```
 
 ### Stale Postgres data after env changes
